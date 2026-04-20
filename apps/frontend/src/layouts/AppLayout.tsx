@@ -7,6 +7,7 @@ const navItems = [
   { to: "/dashboard", label: "แดชบอร์ด", end: true },
   { to: "/transactions", label: "รายการ", end: false },
   { to: "/recurring", label: "รายการซ้ำ", end: false },
+  { to: "/budget", label: "งบประมาณ", end: false },
   { to: "/categories", label: "หมวดหมู่", end: false },
 ];
 
