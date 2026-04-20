@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { CategoryResponse } from "@finance-tracker/shared";
-import { CreateBudgetDto } from "@finance-tracker/shared";
+import { CreateBudgetDto, UpdateBudgetDto } from "@finance-tracker/shared";
 import { ApiError } from "../../lib/api";
-import { saveBudget } from "../../lib/budget-api";
+import { createBudget, updateBudget } from "../../lib/budget-api";
 import { validateDto } from "../../lib/validate-dto";
 import type { FieldErrors } from "../../lib/validate-dto";
 import { formatMonthYearThai } from "../../lib/format";
@@ -14,8 +14,8 @@ import { Modal } from "../ui/Modal";
 
 interface BudgetFormModalProps {
   isOpen: boolean;
-  mode: "create" | "edit";
   category: CategoryResponse | null;
+  budgetId: string | null;
   currentAmount: number;
   month: number;
   year: number;
@@ -25,28 +25,26 @@ interface BudgetFormModalProps {
 
 export function BudgetFormModal({
   isOpen,
-  mode,
   category,
+  budgetId,
   currentAmount,
   month,
   year,
   onClose,
   onSaved,
 }: BudgetFormModalProps) {
+  const mode: "create" | "edit" = budgetId ? "edit" : "create";
+
   const [amount, setAmount] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors<CreateBudgetDto>>(
-    {},
-  );
+  const [amountError, setAmountError] = useState<string | undefined>(undefined);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
-    setFieldErrors({});
+    setAmountError(undefined);
     setFormError(null);
-    setAmount(
-      mode === "edit" && currentAmount > 0 ? currentAmount.toString() : "",
-    );
+    setAmount(mode === "edit" ? currentAmount.toString() : "");
   }, [isOpen, mode, currentAmount]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -55,28 +53,35 @@ export function BudgetFormModal({
     setFormError(null);
 
     const amountNumber = Number(amount);
-    const dto = Object.assign(new CreateBudgetDto(), {
-      amount: Number.isFinite(amountNumber) ? amountNumber : NaN,
-      categoryId: category.id,
-      month,
-      year,
-    });
+    const amountValue = Number.isFinite(amountNumber) ? amountNumber : NaN;
 
-    const errors = await validateDto(dto);
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
+    const error =
+      mode === "edit"
+        ? await validateAmount(new UpdateBudgetDto(), { amount: amountValue })
+        : await validateAmount(new CreateBudgetDto(), {
+            amount: amountValue,
+            categoryId: category.id,
+            month,
+            year,
+          });
+    if (error) {
+      setAmountError(error);
       return;
     }
-    setFieldErrors({});
+    setAmountError(undefined);
 
     setIsSubmitting(true);
     try {
-      await saveBudget({
-        amount: amountNumber,
-        categoryId: category.id,
-        month,
-        year,
-      });
+      if (mode === "edit" && budgetId) {
+        await updateBudget(budgetId, { amount: amountNumber });
+      } else {
+        await createBudget({
+          amount: amountNumber,
+          categoryId: category.id,
+          month,
+          year,
+        });
+      }
       onSaved();
     } catch (err) {
       const message =
@@ -143,11 +148,20 @@ export function BudgetFormModal({
           placeholder="0.00"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          error={fieldErrors.amount}
+          error={amountError}
           required
           autoFocus
         />
       </form>
     </Modal>
   );
+}
+
+async function validateAmount<T extends object>(
+  instance: T,
+  values: Partial<T> & { amount: number },
+): Promise<string | undefined> {
+  Object.assign(instance, values);
+  const errors = await validateDto(instance as object);
+  return (errors as FieldErrors<{ amount: number }>).amount;
 }

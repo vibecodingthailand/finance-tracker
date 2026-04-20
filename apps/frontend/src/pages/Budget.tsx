@@ -21,15 +21,15 @@ interface BudgetRow {
 
 interface FormModalState {
   isOpen: boolean;
-  mode: "create" | "edit";
   category: CategoryResponse | null;
+  budgetId: string | null;
   currentAmount: number;
 }
 
 const CLOSED_MODAL: FormModalState = {
   isOpen: false,
-  mode: "create",
   category: null,
+  budgetId: null,
   currentAmount: 0,
 };
 
@@ -94,18 +94,19 @@ export default function Budget() {
   function openCreateModal(category: CategoryResponse) {
     setFormModal({
       isOpen: true,
-      mode: "create",
       category,
+      budgetId: null,
       currentAmount: 0,
     });
   }
 
-  function openEditModal(category: CategoryResponse, currentAmount: number) {
+  function openEditModal(row: BudgetRow) {
+    if (!row.status) return;
     setFormModal({
       isOpen: true,
-      mode: "edit",
-      category,
-      currentAmount,
+      category: row.category,
+      budgetId: row.status.id,
+      currentAmount: row.status.budgetAmount,
     });
   }
 
@@ -157,9 +158,7 @@ export default function Budget() {
               key={row.category.id}
               row={row}
               onCreate={() => openCreateModal(row.category)}
-              onEdit={() =>
-                openEditModal(row.category, row.status?.budgetAmount ?? 0)
-              }
+              onEdit={() => openEditModal(row)}
             />
           ))}
         </ul>
@@ -167,8 +166,8 @@ export default function Budget() {
 
       <BudgetFormModal
         isOpen={formModal.isOpen}
-        mode={formModal.mode}
         category={formModal.category}
+        budgetId={formModal.budgetId}
         currentAmount={formModal.currentAmount}
         month={month}
         year={year}

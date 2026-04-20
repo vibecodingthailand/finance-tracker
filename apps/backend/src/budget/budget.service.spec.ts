@@ -320,6 +320,7 @@ describe("BudgetService", () => {
       );
       expect(result).toEqual([
         {
+          id: "b1",
           categoryName: "อาหาร",
           categoryIcon: "u",
           budgetAmount: 5000,
@@ -328,6 +329,7 @@ describe("BudgetService", () => {
           isOverBudget: false,
         },
         {
+          id: "b2",
           categoryName: "เดินทาง",
           categoryIcon: "car",
           budgetAmount: 2000,
