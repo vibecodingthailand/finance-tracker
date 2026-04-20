@@ -16,13 +16,19 @@
     "prisma": "dotenv -e ../../.env -- prisma",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
-    "prisma:studio": "dotenv -e ../../.env -- prisma studio"
+    "prisma:studio": "dotenv -e ../../.env -- prisma studio",
+    "db:seed": "dotenv -e ../../.env -- prisma db seed",
+    "db:reset": "dotenv -e ../../.env -- prisma migrate reset"
   },
   "dependencies": {
-    "@prisma/client": "^7.7.0"
+    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/client": "^7.7.0",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "prisma": "^7.7.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }
