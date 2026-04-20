@@ -17,8 +17,8 @@
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "prisma:studio": "dotenv -e ../../.env -- prisma studio",
-    "db:seed": "dotenv -e ../../.env -- prisma db seed",
-    "db:reset": "dotenv -e ../../.env -- prisma migrate reset"
+    "prisma:seed": "dotenv -e ../../.env -- prisma db seed",
+    "prisma:reset": "dotenv -e ../../.env -- prisma migrate reset"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.7.0",
