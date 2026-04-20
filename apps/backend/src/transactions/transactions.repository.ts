@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type {
   Prisma,
   Transaction,
+  TransactionSource,
   TransactionType,
 } from "@finance-tracker/database";
 import { PrismaService } from "../prisma/prisma.service";
@@ -37,6 +38,7 @@ export class TransactionsRepository {
     amount: number;
     type: TransactionType;
     description: string | null;
+    source?: TransactionSource;
   }): Promise<TransactionWithCategory> {
     return this.prisma.transaction.create({
       data: input,

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { resolve } from "node:path";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
@@ -7,6 +8,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { CategoriesModule } from "./categories/categories.module";
 import { TransactionsModule } from "./transactions/transactions.module";
+import { RecurringModule } from "./recurring/recurring.module";
 
 @Module({
   imports: [
@@ -14,10 +16,12 @@ import { TransactionsModule } from "./transactions/transactions.module";
       isGlobal: true,
       envFilePath: resolve(__dirname, "../../../.env"),
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     CategoriesModule,
     TransactionsModule,
+    RecurringModule,
   ],
   controllers: [AppController],
   providers: [AppService],
