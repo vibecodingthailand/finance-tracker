@@ -8,10 +8,13 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import type { Response } from "express";
 import {
   CreateTransactionDto,
+  ExportQueryDto,
   PaginatedTransactions,
   SummaryQueryDto,
   SummaryResponse,
@@ -51,6 +54,21 @@ export class TransactionsController {
     @Query() query: SummaryQueryDto,
   ): Promise<SummaryResponse> {
     return this.service.summary(user.id, query);
+  }
+
+  @Get("export")
+  async export(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ExportQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { filename, content } = await this.service.exportCsv(user.id, query);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`,
+    );
+    res.send(content);
   }
 
   @Patch(":id")
