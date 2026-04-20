@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { PrismaModule } from "./prisma/prisma.module";
+import { AuthModule } from "./auth/auth.module";
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { PrismaModule } from "./prisma/prisma.module";
       envFilePath: resolve(__dirname, "../../../.env"),
     }),
     PrismaModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
