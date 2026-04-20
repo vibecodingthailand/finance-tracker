@@ -4,8 +4,11 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "composite": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler"
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": false
   },
   "include": ["src/**/*"]
 }
