@@ -1,0 +1,29 @@
+{
+  "name": "finance-tracker",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Personal Finance Tracker monorepo",
+  "scripts": {
+    "dev:frontend": "pnpm --filter @finance-tracker/frontend dev",
+    "dev:backend": "pnpm --filter @finance-tracker/backend start:dev",
+    "build": "pnpm -r build",
+    "prisma:generate": "pnpm --filter @finance-tracker/database prisma:generate",
+    "prisma:migrate": "pnpm --filter @finance-tracker/database prisma:migrate"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0",
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "pnpm@10.12.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
+  }
+}
