@@ -1,11 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-export function createPrismaClient(connectionString?: string): PrismaClient {
+function resolveUrl(connectionString?: string): string {
   const url = connectionString ?? process.env.DATABASE_URL;
   if (!url) {
     throw new Error("DATABASE_URL is not set");
   }
-  const adapter = new PrismaPg({ connectionString: url });
-  return new PrismaClient({ adapter });
+  return url;
+}
+
+export function createPrismaAdapter(connectionString?: string): PrismaPg {
+  return new PrismaPg({ connectionString: resolveUrl(connectionString) });
+}
+
+export function createPrismaClient(connectionString?: string): PrismaClient {
+  return new PrismaClient({ adapter: createPrismaAdapter(connectionString) });
 }
