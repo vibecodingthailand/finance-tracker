@@ -14,6 +14,7 @@ import {
 import { validateDto } from "../../lib/validate-dto";
 import type { FieldErrors } from "../../lib/validate-dto";
 import { Button } from "../ui/Button";
+import { EmojiPicker } from "../ui/EmojiPicker";
 import { FormAlert } from "../ui/FormAlert";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
@@ -176,16 +177,11 @@ export function CategoryFormModal({
           </div>
         )}
 
-        <Input
-          label="ไอคอน (อีโมจิ)"
-          name="icon"
-          type="text"
-          placeholder="เช่น 🍜"
+        <EmojiPicker
+          label="ไอคอน"
           value={form.icon}
-          onChange={(e) => updateField("icon", e.target.value)}
+          onChange={(emoji) => updateField("icon", emoji)}
           error={fieldErrors.icon}
-          maxLength={50}
-          required
         />
 
         <Input
