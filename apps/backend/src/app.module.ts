@@ -9,6 +9,7 @@ import { AuthModule } from "./auth/auth.module";
 import { CategoriesModule } from "./categories/categories.module";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { RecurringModule } from "./recurring/recurring.module";
+import { BudgetModule } from "./budget/budget.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RecurringModule } from "./recurring/recurring.module";
     CategoriesModule,
     TransactionsModule,
     RecurringModule,
+    BudgetModule,
   ],
   controllers: [AppController],
   providers: [AppService],
