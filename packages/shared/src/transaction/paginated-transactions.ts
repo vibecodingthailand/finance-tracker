@@ -1,4 +1,4 @@
-import { TransactionResponse } from "./transaction-response";
+import type { TransactionResponse } from "./transaction-response";
 
 export interface PaginatedTransactions {
   data: TransactionResponse[];

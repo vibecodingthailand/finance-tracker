@@ -12,9 +12,12 @@
   },
   "dependencies": {
     "@finance-tracker/shared": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-router": "^7.14.1"
+    "react-router": "^7.14.1",
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",

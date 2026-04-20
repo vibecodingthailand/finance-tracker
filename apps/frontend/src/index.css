@@ -1,1 +1,19 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Sarabun", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Kanit", ui-sans-serif, system-ui, sans-serif;
+  --color-accent-400: var(--color-emerald-400);
+  --color-accent-500: var(--color-emerald-500);
+  --color-accent-600: var(--color-emerald-600);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+}

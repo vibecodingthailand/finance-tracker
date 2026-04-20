@@ -1,4 +1,4 @@
-import { UserProfile } from "./user-profile";
+import type { UserProfile } from "./user-profile";
 
 export interface AuthResponse {
   accessToken: string;
