@@ -32,8 +32,8 @@ export function CategoryPieChart({
         {title}
       </h3>
       {hasData ? (
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <PieChart>
               <Pie
                 data={data}
@@ -54,7 +54,7 @@ export function CategoryPieChart({
                 ))}
               </Pie>
               <Tooltip content={<PieTooltip />} />
-              <Legend content={<PieLegend palette={palette} />} />
+              <Legend content={<PieLegend data={data} palette={palette} />} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -129,16 +129,19 @@ function PieTooltip({
 }
 
 interface PieLegendProps {
-  payload?: { value: string; payload: { payload: CategoryBreakdown } }[];
+  payload?: { value: string }[];
   palette: string[];
+  data: CategoryBreakdown[];
 }
 
-function PieLegend({ payload, palette }: PieLegendProps) {
+function PieLegend({ payload, palette, data }: PieLegendProps) {
   if (!payload) return null;
+  const byName = new Map(data.map((d) => [d.name, d]));
   return (
     <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-300">
       {payload.map((item, index) => {
-        const breakdown = item.payload.payload;
+        const breakdown = byName.get(item.value);
+        if (!breakdown) return null;
         return (
           <li key={item.value} className="flex items-center gap-2">
             <svg width="10" height="10" aria-hidden="true">

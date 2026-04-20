@@ -44,8 +44,8 @@ export function DailyBarChart({ data }: DailyBarChartProps) {
         รายรับ-รายจ่ายรายวัน
       </h3>
       {hasData ? (
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart
               data={points}
               margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
