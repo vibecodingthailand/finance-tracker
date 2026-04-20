@@ -102,3 +102,64 @@ function extractErrorMessage(payload: unknown): string {
   }
   return "เกิดข้อผิดพลาด กรุณาลองใหม่";
 }
+
+export async function apiDownload(
+  path: string,
+  query?: Record<string, string | number | boolean | undefined>,
+): Promise<void> {
+  const url = new URL(`${API_BASE_URL}${path}`);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== "") {
+        url.searchParams.set(key, String(value));
+      }
+    }
+  }
+
+  const headers: Record<string, string> = {};
+  const token = getStoredToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers,
+  });
+
+  if (response.status === 401) {
+    setStoredToken(null);
+    unauthorizedHandler?.();
+    throw new ApiError(401, "กรุณาเข้าสู่ระบบใหม่");
+  }
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const payload = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
+    throw new ApiError(response.status, extractErrorMessage(payload), payload);
+  }
+
+  const filename =
+    extractFilename(response.headers.get("content-disposition")) ?? "download";
+  const blob = await response.blob();
+  triggerDownload(blob, filename);
+}
+
+function extractFilename(disposition: string | null): string | null {
+  if (!disposition) return null;
+  const match = /filename="?([^"]+)"?/i.exec(disposition);
+  return match?.[1] ?? null;
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(objectUrl);
+}

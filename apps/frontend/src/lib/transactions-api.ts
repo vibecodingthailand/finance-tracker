@@ -5,7 +5,7 @@ import type {
   TransactionResponse,
   TransactionType,
 } from "@finance-tracker/shared";
-import { apiRequest } from "./api";
+import { apiDownload, apiRequest } from "./api";
 
 export interface SummaryParams {
   month: number;
@@ -82,5 +82,17 @@ export function updateTransaction(
 export function deleteTransaction(id: string): Promise<void> {
   return apiRequest<void>(`/transactions/${id}`, {
     method: "DELETE",
+  });
+}
+
+export interface ExportCsvParams {
+  startDate: string;
+  endDate: string;
+}
+
+export function exportTransactionsCsv(params: ExportCsvParams): Promise<void> {
+  return apiDownload("/transactions/export", {
+    startDate: params.startDate,
+    endDate: params.endDate,
   });
 }

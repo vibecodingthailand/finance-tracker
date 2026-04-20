@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import type {
   CategoryResponse,
   PaginatedTransactions,
@@ -16,6 +16,7 @@ import { Button } from "../components/ui/Button";
 import { FormAlert } from "../components/ui/FormAlert";
 import { ApiError } from "../lib/api";
 import {
+  exportTransactionsCsv,
   fetchCategories,
   fetchTransactions,
 } from "../lib/transactions-api";
@@ -50,6 +51,7 @@ export default function Transactions() {
   const [deleteTarget, setDeleteTarget] = useState<TransactionResponse | null>(
     null,
   );
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +124,22 @@ export default function Transactions() {
     await loadTransactions();
   }
 
+  async function handleExport() {
+    if (!filters.startDate || !filters.endDate) return;
+    setIsExporting(true);
+    setError(null);
+    try {
+      await exportTransactionsCsv({
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+      });
+    } catch (err) {
+      setError(extractMessage(err));
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   async function handleDeleted() {
     setDeleteTarget(null);
     if (result && result.data.length === 1 && page > 1) {
@@ -155,10 +173,26 @@ export default function Transactions() {
               : "ยังไม่มีรายการ"}
           </p>
         </div>
-        <Button onClick={openCreateModal} disabled={!canCreate}>
-          <Plus size={18} />
-          เพิ่มรายการ
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Button
+            variant="secondary"
+            onClick={handleExport}
+            disabled={!filters.startDate || !filters.endDate || total === 0}
+            isLoading={isExporting}
+            title={
+              !filters.startDate || !filters.endDate
+                ? "กรุณาเลือกช่วงวันที่ก่อน"
+                : undefined
+            }
+          >
+            <Download size={18} />
+            Export CSV
+          </Button>
+          <Button onClick={openCreateModal} disabled={!canCreate}>
+            <Plus size={18} />
+            เพิ่มรายการ
+          </Button>
+        </div>
       </header>
 
       <TransactionFilters
