@@ -8,6 +8,7 @@ import {
   CategoryBreakdown,
   CreateTransactionDto,
   DailyTotal,
+  ExportQueryDto,
   PaginatedTransactions,
   SummaryQueryDto,
   SummaryResponse,
@@ -138,6 +139,21 @@ export class TransactionsService {
     await this.repo.delete(existing.id);
   }
 
+  async exportCsv(
+    userId: string,
+    query: ExportQueryDto,
+  ): Promise<{ filename: string; content: string }> {
+    const startDate = new Date(query.startDate);
+    const endDate = new Date(query.endDate);
+    if (startDate > endDate) {
+      throw new BadRequestException("startDate ต้องไม่มากกว่า endDate");
+    }
+    const rows = await this.repo.findForExport(userId, startDate, endDate);
+    const content = buildCsv(rows);
+    const filename = `transactions-${toDateStamp(startDate)}-${toDateStamp(endDate)}.csv`;
+    return { filename, content };
+  }
+
   private async findOwned(
     userId: string,
     id: string,
@@ -239,6 +255,51 @@ function round2(n: number): number {
 
 function amountToNumber(amount: Prisma.Decimal | number): number {
   return typeof amount === "number" ? amount : amount.toNumber();
+}
+
+const CSV_HEADERS = ["วันที่", "รายละเอียด", "หมวดหมู่", "จำนวน", "ประเภท"];
+const CSV_BOM = "\uFEFF";
+const thaiDateFormatter = new Intl.DateTimeFormat("th-TH", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+const amountFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function buildCsv(rows: TransactionWithCategory[]): string {
+  const lines = [CSV_HEADERS.map(csvEscape).join(",")];
+  for (const tx of rows) {
+    const amount = amountToNumber(tx.amount);
+    lines.push(
+      [
+        thaiDateFormatter.format(tx.createdAt),
+        tx.description ?? "",
+        tx.category.name,
+        amountFormatter.format(amount),
+        tx.type === "INCOME" ? "รายรับ" : "รายจ่าย",
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+  }
+  return CSV_BOM + lines.join("\r\n");
+}
+
+function csvEscape(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function toDateStamp(d: Date): string {
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${yyyy}${mm}${dd}`;
 }
 
 function toResponse(tx: TransactionWithCategory): TransactionResponse {

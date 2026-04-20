@@ -99,6 +99,21 @@ export class TransactionsRepository {
     });
   }
 
+  findForExport(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<TransactionWithCategory[]> {
+    return this.prisma.transaction.findMany({
+      where: {
+        userId,
+        createdAt: { gte: startDate, lte: endDate },
+      },
+      include: { category: true },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
   private buildWhere(filter: ListFilter): Prisma.TransactionWhereInput {
     const where: Prisma.TransactionWhereInput = { userId: filter.userId };
     if (filter.type) where.type = filter.type;

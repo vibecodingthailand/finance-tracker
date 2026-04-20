@@ -75,6 +75,7 @@ describe("TransactionsService", () => {
       delete: jest.fn(),
       list: jest.fn(),
       findInRange: jest.fn(),
+      findForExport: jest.fn(),
     };
     const categoriesMock = {
       findForUser: jest.fn(),
@@ -357,6 +358,99 @@ describe("TransactionsService", () => {
       await expect(
         service.update("user-1", "tx-1", { type: TransactionType.INCOME }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe("exportCsv", () => {
+    it("generates CSV with Thai headers, comma-separated amount, and filename", async () => {
+      const food = makeCategory({ id: "cat-food", name: "อาหาร", icon: "u" });
+      const salary = makeCategory({
+        id: "cat-salary",
+        name: "เงินเดือน",
+        icon: "cash",
+        type: TransactionType.INCOME,
+      });
+      repo.findForExport.mockResolvedValue([
+        makeTransaction({
+          id: "t1",
+          amount: 1234.5,
+          type: TransactionType.EXPENSE,
+          description: "ข้าวมันไก่",
+          categoryId: food.id,
+          category: food,
+          createdAt: new Date(2026, 3, 5, 10),
+        }),
+        makeTransaction({
+          id: "t2",
+          amount: 25000,
+          type: TransactionType.INCOME,
+          description: null,
+          categoryId: salary.id,
+          category: salary,
+          createdAt: new Date(2026, 3, 1, 9),
+        }),
+      ]);
+
+      const result = await service.exportCsv("user-1", {
+        startDate: "2026-04-01T00:00:00.000Z",
+        endDate: "2026-04-30T23:59:59.000Z",
+      });
+
+      expect(repo.findForExport).toHaveBeenCalledWith(
+        "user-1",
+        new Date("2026-04-01T00:00:00.000Z"),
+        new Date("2026-04-30T23:59:59.000Z"),
+      );
+      expect(result.filename).toBe("transactions-20260401-20260430.csv");
+      expect(result.content.startsWith("\uFEFF")).toBe(true);
+      const lines = result.content.slice(1).split("\r\n");
+      expect(lines[0]).toBe("วันที่,รายละเอียด,หมวดหมู่,จำนวน,ประเภท");
+      expect(lines[1]).toContain("ข้าวมันไก่");
+      expect(lines[1]).toContain("อาหาร");
+      expect(lines[1]).toContain(`"1,234.50"`);
+      expect(lines[1]).toContain("รายจ่าย");
+      expect(lines[2]).toContain("เงินเดือน");
+      expect(lines[2]).toContain(`"25,000.00"`);
+      expect(lines[2]).toContain("รายรับ");
+    });
+
+    it("escapes commas and quotes in description", async () => {
+      const food = makeCategory();
+      repo.findForExport.mockResolvedValue([
+        makeTransaction({
+          description: 'ข้าว, "พิเศษ"',
+          category: food,
+          categoryId: food.id,
+        }),
+      ]);
+
+      const result = await service.exportCsv("user-1", {
+        startDate: "2026-04-01T00:00:00.000Z",
+        endDate: "2026-04-30T23:59:59.000Z",
+      });
+      const dataLine = result.content.slice(1).split("\r\n")[1];
+      expect(dataLine).toContain('"ข้าว, ""พิเศษ"""');
+    });
+
+    it("rejects startDate after endDate with 400", async () => {
+      await expect(
+        service.exportCsv("user-1", {
+          startDate: "2026-04-30T00:00:00.000Z",
+          endDate: "2026-04-01T00:00:00.000Z",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.findForExport).not.toHaveBeenCalled();
+    });
+
+    it("returns CSV with only header when no transactions", async () => {
+      repo.findForExport.mockResolvedValue([]);
+      const result = await service.exportCsv("user-1", {
+        startDate: "2026-04-01T00:00:00.000Z",
+        endDate: "2026-04-30T23:59:59.000Z",
+      });
+      expect(result.content).toBe(
+        "\uFEFFวันที่,รายละเอียด,หมวดหมู่,จำนวน,ประเภท",
+      );
     });
   });
 
