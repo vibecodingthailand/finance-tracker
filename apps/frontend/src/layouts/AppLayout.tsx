@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { Button } from "../components/ui/Button";
+import { Logo } from "../components/ui/Logo";
 
 const navItems = [
   { to: "/dashboard", label: "แดชบอร์ด", end: true },
@@ -18,12 +19,10 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 md:flex-row">
-      <aside className="border-b border-zinc-800 bg-zinc-900 md:w-64 md:shrink-0 md:border-b-0 md:border-r">
-        <div className="flex items-center justify-between border-zinc-800 px-6 py-5 md:border-b">
-          <h1 className="font-heading text-lg font-extrabold text-zinc-100">
-            Finance Tracker
-          </h1>
+    <div className="flex min-h-screen flex-col text-zinc-100 md:flex-row">
+      <aside className="border-b border-zinc-800/80 bg-zinc-900/70 backdrop-blur-xl md:w-64 md:shrink-0 md:border-b-0 md:border-r">
+        <div className="flex items-center justify-between border-zinc-800/80 px-6 py-5 md:border-b">
+          <Logo size="md" />
         </div>
         <nav className="flex gap-1 overflow-x-auto p-3 md:flex-col">
           {navItems.map((item) => (
@@ -34,8 +33,8 @@ export default function AppLayout() {
               className={({ isActive }) =>
                 `min-h-[44px] whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition duration-200 ${
                   isActive
-                    ? "bg-emerald-500/15 text-emerald-300"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                    ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/10 text-emerald-200 ring-1 ring-emerald-500/30"
+                    : "text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-100"
                 }`
               }
             >
@@ -43,7 +42,7 @@ export default function AppLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="hidden md:block md:border-t md:border-zinc-800 md:p-4">
+        <div className="hidden md:block md:border-t md:border-zinc-800/80 md:p-4">
           <p className="mb-3 text-xs text-zinc-500">เข้าสู่ระบบในชื่อ</p>
           <p className="mb-4 truncate text-sm font-medium text-zinc-200">
             {user?.name}

@@ -13,7 +13,7 @@ const BASE =
 
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary:
-    "bg-emerald-500 text-zinc-950 hover:bg-emerald-400 focus:ring-emerald-400/50",
+    "bg-emerald-500 text-zinc-950 hover:bg-emerald-400 focus:ring-emerald-400/50 shadow-lg shadow-emerald-500/30 hover:shadow-emerald-400/50",
   secondary:
     "bg-zinc-800 text-zinc-100 hover:bg-zinc-700 focus:ring-zinc-500/50",
   ghost:

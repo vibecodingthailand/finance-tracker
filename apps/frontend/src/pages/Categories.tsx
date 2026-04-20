@@ -82,7 +82,7 @@ export default function Categories() {
     <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-heading text-2xl font-extrabold text-zinc-100">
+          <h2 className="bg-gradient-to-r from-zinc-50 via-emerald-200 to-cyan-300 bg-clip-text font-heading text-2xl font-extrabold text-transparent">
             หมวดหมู่
           </h2>
           <p className="mt-1 text-sm text-zinc-400">

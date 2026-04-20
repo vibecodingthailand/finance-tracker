@@ -11,6 +11,7 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { FormAlert } from "../components/ui/FormAlert";
 import { Input } from "../components/ui/Input";
+import { Logo } from "../components/ui/Logo";
 
 interface LocationState {
   from?: string;
@@ -56,18 +57,16 @@ export default function Login() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-md animate-[fadeIn_300ms_ease-out]">
-        <header className="mb-8 text-center">
-          <h1 className="font-heading text-3xl font-extrabold text-zinc-100">
-            Finance Tracker
-          </h1>
-          <p className="mt-2 text-sm text-zinc-400">
+        <header className="mb-8 flex flex-col items-center text-center">
+          <Logo size="lg" />
+          <p className="mt-4 text-sm text-zinc-400">
             เข้าสู่ระบบเพื่อจัดการรายรับรายจ่ายของคุณ
           </p>
         </header>
 
-        <Card className="p-6 sm:p-8">
+        <Card className="bg-zinc-900/70 p-6 backdrop-blur-xl sm:p-8">
           <form className="flex flex-col gap-5" onSubmit={handleSubmit} noValidate>
             <h2 className="font-heading text-xl font-bold text-zinc-100">
               เข้าสู่ระบบ
