@@ -1,9 +1,16 @@
-import { Injectable, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { messagingApi, webhook } from "@line/bot-sdk";
 import { TransactionType } from "@finance-tracker/shared";
 import type { User } from "@finance-tracker/database";
 import { AuthRepository } from "../auth/auth.repository";
+import { LinkService } from "../link/link.service";
 import { TransactionsRepository } from "../transactions/transactions.repository";
 import { CategorizerService } from "./categorizer/categorizer.service";
 import {
@@ -18,7 +25,10 @@ const HELP_TEXT = [
   "• \"สรุป\" = ยอดวันนี้",
   "• \"เดือนนี้\" = ยอดเดือนนี้",
   "• \"ยกเลิก\" = ลบรายการล่าสุด",
+  "• \"เชื่อม XXXXXX\" = เชื่อมบัญชีกับเว็บ",
 ].join("\n");
+
+const LINK_COMMAND_PATTERN = /^เชื่อม\s+(\d{6})$/;
 
 @Injectable()
 export class LineService {
@@ -30,6 +40,7 @@ export class LineService {
     private readonly users: AuthRepository,
     private readonly transactions: TransactionsRepository,
     private readonly categorizer: CategorizerService,
+    private readonly links: LinkService,
   ) {
     const channelAccessToken = config.getOrThrow<string>(
       "LINE_CHANNEL_ACCESS_TOKEN",
@@ -57,7 +68,7 @@ export class LineService {
     if (!lineUserId) return;
 
     const user = await this.findOrCreateUser(lineUserId);
-    const reply = await this.buildReply(user.id, event.message.text);
+    const reply = await this.buildReply(user, event.message.text);
 
     await this.client.replyMessage({
       replyToken,
@@ -74,12 +85,36 @@ export class LineService {
     });
   }
 
-  private async buildReply(userId: string, text: string): Promise<string> {
+  private async buildReply(user: User, text: string): Promise<string> {
+    const trimmed = text.trim();
+    const linkMatch = LINK_COMMAND_PATTERN.exec(trimmed);
+    if (linkMatch) {
+      return this.handleLink(user, linkMatch[1]);
+    }
     const parsed = parseThaiMessage(text);
     if (parsed) {
-      return this.recordTransaction(userId, parsed);
+      return this.recordTransaction(user.id, parsed);
     }
-    return this.handleCommand(userId, text.trim());
+    return this.handleCommand(user.id, trimmed);
+  }
+
+  private async handleLink(user: User, code: string): Promise<string> {
+    try {
+      await this.links.consumeCode({ code, lineUser: user });
+      return "เชื่อมเรียบร้อย";
+    } catch (err) {
+      if (
+        err instanceof BadRequestException ||
+        err instanceof NotFoundException ||
+        err instanceof ConflictException
+      ) {
+        const message = err.message;
+        return typeof message === "string" && message.length > 0
+          ? message
+          : "เชื่อมบัญชีไม่สำเร็จ";
+      }
+      throw err;
+    }
   }
 
   private async recordTransaction(

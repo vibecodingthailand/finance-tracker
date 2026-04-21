@@ -9,6 +9,7 @@ const navItems = [
   { to: "/recurring", label: "รายการซ้ำ", end: false },
   { to: "/budget", label: "งบประมาณ", end: false },
   { to: "/categories", label: "หมวดหมู่", end: false },
+  { to: "/settings", label: "ตั้งค่า", end: false },
 ];
 
 export default function AppLayout() {

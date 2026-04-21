@@ -1,7 +1,13 @@
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import type { webhook } from "@line/bot-sdk";
 import type { User } from "@finance-tracker/database";
 import type { AuthRepository } from "../auth/auth.repository";
+import type { LinkService } from "../link/link.service";
 import type {
   TransactionWithCategory,
   TransactionsRepository,
@@ -22,6 +28,7 @@ interface Mocks {
     >
   >;
   categorizer: jest.Mocked<Pick<CategorizerService, "categorize">>;
+  links: jest.Mocked<Pick<LinkService, "consumeCode">>;
 }
 
 function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
@@ -43,6 +50,9 @@ function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
     categorizer: {
       categorize: jest.fn(),
     } as unknown as Mocks["categorizer"],
+    links: {
+      consumeCode: jest.fn(),
+    } as unknown as Mocks["links"],
   };
 
   const service = new LineService(
@@ -50,6 +60,7 @@ function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
     mocks.users as unknown as AuthRepository,
     mocks.transactions as unknown as TransactionsRepository,
     mocks.categorizer as unknown as CategorizerService,
+    mocks.links as unknown as LinkService,
   );
 
   const reply: ReplyFn = jest.fn().mockResolvedValue({});
@@ -303,6 +314,83 @@ describe("LineService", () => {
       expect(text).toContain("สรุป");
       expect(text).toContain("เดือนนี้");
       expect(text).toContain("ยกเลิก");
+    });
+  });
+
+  describe("account linking", () => {
+    it("consumes the code and confirms success", async () => {
+      const { service, reply, mocks } = makeService();
+      const user = makeUser();
+      mocks.users.findByLineUserId.mockResolvedValueOnce(user);
+      mocks.links.consumeCode.mockResolvedValueOnce({ webUserId: "web-1" });
+
+      service.processEvents([textMessageEvent("เชื่อม 123456")]);
+      await flushMicrotasks();
+
+      expect(mocks.links.consumeCode).toHaveBeenCalledWith({
+        code: "123456",
+        lineUser: user,
+      });
+      expect(mocks.categorizer.categorize).not.toHaveBeenCalled();
+      expect(mocks.transactions.create).not.toHaveBeenCalled();
+      expect(getReplyText(reply)).toBe("เชื่อมเรียบร้อย");
+    });
+
+    it("replies with the exception message for invalid codes", async () => {
+      const { service, reply, mocks } = makeService();
+      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.links.consumeCode.mockRejectedValueOnce(
+        new NotFoundException("โค้ดไม่ถูกต้อง"),
+      );
+
+      service.processEvents([textMessageEvent("เชื่อม 999999")]);
+      await flushMicrotasks();
+
+      expect(getReplyText(reply)).toBe("โค้ดไม่ถูกต้อง");
+    });
+
+    it("replies with the exception message for expired codes", async () => {
+      const { service, reply, mocks } = makeService();
+      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.links.consumeCode.mockRejectedValueOnce(
+        new BadRequestException("โค้ดหมดอายุแล้ว"),
+      );
+
+      service.processEvents([textMessageEvent("เชื่อม 111111")]);
+      await flushMicrotasks();
+
+      expect(getReplyText(reply)).toBe("โค้ดหมดอายุแล้ว");
+    });
+
+    it("replies with the exception message for already-used codes", async () => {
+      const { service, reply, mocks } = makeService();
+      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.links.consumeCode.mockRejectedValueOnce(
+        new ConflictException("โค้ดนี้ถูกใช้แล้ว"),
+      );
+
+      service.processEvents([textMessageEvent("เชื่อม 222222")]);
+      await flushMicrotasks();
+
+      expect(getReplyText(reply)).toBe("โค้ดนี้ถูกใช้แล้ว");
+    });
+
+    it("treats non-6-digit link attempts as a transaction fallback", async () => {
+      const { service, mocks } = makeService();
+      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.categorizer.categorize.mockResolvedValueOnce({
+        id: "c-misc",
+        name: "อื่นๆ",
+      });
+      mocks.transactions.create.mockResolvedValueOnce(
+        {} as TransactionWithCategory,
+      );
+
+      service.processEvents([textMessageEvent("เชื่อม 500")]);
+      await flushMicrotasks();
+
+      expect(mocks.links.consumeCode).not.toHaveBeenCalled();
+      expect(mocks.transactions.create).toHaveBeenCalled();
     });
   });
 

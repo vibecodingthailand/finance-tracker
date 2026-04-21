@@ -30,6 +30,20 @@ model User {
   categories   Category[]
   recurrings   Recurring[]
   budgets      Budget[]
+  linkCodes    LinkCode[]
+}
+
+model LinkCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Category {

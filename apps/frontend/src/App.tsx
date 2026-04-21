@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Recurring from "./pages/Recurring";
 import Register from "./pages/Register";
+import Settings from "./pages/Settings";
 import Transactions from "./pages/Transactions";
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="categories" element={<Categories />} />
             <Route path="recurring" element={<Recurring />} />
             <Route path="budget" element={<Budget />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
