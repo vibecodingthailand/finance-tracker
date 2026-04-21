@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import { User } from "@finance-tracker/database";
 import { PrismaService } from "../prisma/prisma.service";
@@ -20,5 +21,23 @@ export class AuthRepository {
     name: string;
   }): Promise<User> {
     return this.prisma.user.create({ data: input });
+  }
+
+  findByLineUserId(lineUserId: string): Promise<User | null> {
+    return this.prisma.user.findUnique({ where: { lineUserId } });
+  }
+
+  createLineUser(input: {
+    lineUserId: string;
+    name: string;
+  }): Promise<User> {
+    return this.prisma.user.create({
+      data: {
+        email: `line:${input.lineUserId}@placeholder.local`,
+        password: randomBytes(32).toString("hex"),
+        name: input.name,
+        lineUserId: input.lineUserId,
+      },
+    });
   }
 }

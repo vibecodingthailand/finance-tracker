@@ -84,6 +84,14 @@ export class TransactionsRepository {
     return { rows, total };
   }
 
+  findLatestForUser(userId: string): Promise<TransactionWithCategory | null> {
+    return this.prisma.transaction.findFirst({
+      where: { userId },
+      include: { category: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   findInRange(
     userId: string,
     startDate: Date,
