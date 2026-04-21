@@ -12,6 +12,7 @@
     "test": "pnpm --filter @finance-tracker/shared build && jest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "@finance-tracker/database": "workspace:*",
     "@finance-tracker/shared": "workspace:*",
     "@line/bot-sdk": "^11.0.0",
