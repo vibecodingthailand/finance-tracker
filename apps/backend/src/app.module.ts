@@ -10,6 +10,7 @@ import { CategoriesModule } from "./categories/categories.module";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { RecurringModule } from "./recurring/recurring.module";
 import { BudgetModule } from "./budget/budget.module";
+import { LineModule } from "./line/line.module";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { BudgetModule } from "./budget/budget.module";
     TransactionsModule,
     RecurringModule,
     BudgetModule,
+    LineModule,
   ],
   controllers: [AppController],
   providers: [AppService],

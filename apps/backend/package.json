@@ -14,6 +14,7 @@
   "dependencies": {
     "@finance-tracker/database": "workspace:*",
     "@finance-tracker/shared": "workspace:*",
+    "@line/bot-sdk": "^11.0.0",
     "@nestjs/common": "^11.1.19",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.1.19",
