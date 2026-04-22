@@ -27,6 +27,12 @@ export class AuthRepository {
     return this.prisma.user.findUnique({ where: { lineUserId } });
   }
 
+  findAllWithLineUserId(): Promise<User[]> {
+    return this.prisma.user.findMany({
+      where: { lineUserId: { not: null } },
+    });
+  }
+
   createLineUser(input: {
     lineUserId: string;
     name: string;

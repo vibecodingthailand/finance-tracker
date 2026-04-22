@@ -1,6 +1,8 @@
 import { BadRequestException } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { TransactionType } from "@finance-tracker/shared";
+import type { User } from "@finance-tracker/database";
+import type { AuthRepository } from "../auth/auth.repository";
 import type { TransactionsRepository } from "../transactions/transactions.repository";
 
 const mockCreate = jest.fn();
@@ -9,6 +11,16 @@ jest.mock("@anthropic-ai/sdk", () => ({
   default: jest.fn().mockImplementation(() => ({
     messages: { create: mockCreate },
   })),
+}));
+
+const mockPushMessage = jest.fn();
+jest.mock("@line/bot-sdk", () => ({
+  __esModule: true,
+  messagingApi: {
+    MessagingApiClient: jest.fn().mockImplementation(() => ({
+      pushMessage: mockPushMessage,
+    })),
+  },
 }));
 
 import { InsightService } from "./insight.service";
@@ -77,6 +89,9 @@ function makeService(): {
   transactions: jest.Mocked<
     Pick<TransactionsRepository, "findInRange">
   >;
+  users: jest.Mocked<
+    Pick<AuthRepository, "findById" | "findAllWithLineUserId">
+  >;
 } {
   const config = {
     getOrThrow: jest.fn().mockReturnValue("fake-key"),
@@ -84,16 +99,38 @@ function makeService(): {
   const transactions = {
     findInRange: jest.fn(),
   } as unknown as jest.Mocked<Pick<TransactionsRepository, "findInRange">>;
+  const users = {
+    findById: jest.fn(),
+    findAllWithLineUserId: jest.fn(),
+  } as unknown as jest.Mocked<
+    Pick<AuthRepository, "findById" | "findAllWithLineUserId">
+  >;
   const service = new InsightService(
     config,
     transactions as unknown as TransactionsRepository,
+    users as unknown as AuthRepository,
   );
-  return { service, transactions };
+  return { service, transactions, users };
+}
+
+function makeUser(partial: Partial<User> = {}): User {
+  return {
+    id: "user-1",
+    email: "a@b.c",
+    password: "x",
+    name: "A",
+    lineUserId: "U1",
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    ...partial,
+  } as User;
 }
 
 beforeEach(() => {
   mockCreate.mockReset();
   mockCreate.mockResolvedValue(textResponse("💡 สรุปจาก Claude (mock)"));
+  mockPushMessage.mockReset();
+  mockPushMessage.mockResolvedValue({});
 });
 
 describe("InsightService", () => {
@@ -406,6 +443,159 @@ describe("InsightService", () => {
 
       expect(result.summary).toContain("รายรับ ฿0.00");
       expect(result.summary).toContain("รายจ่าย ฿0.00");
+    });
+  });
+
+  describe("sendMonthlyInsight", () => {
+    it("skips when user has no lineUserId", async () => {
+      const { service, transactions, users } = makeService();
+      users.findById.mockResolvedValueOnce(makeUser({ lineUserId: null }));
+
+      const sent = await service.sendMonthlyInsight("user-1", 4, 2026);
+
+      expect(sent).toBe(false);
+      expect(transactions.findInRange).not.toHaveBeenCalled();
+      expect(mockPushMessage).not.toHaveBeenCalled();
+    });
+
+    it("skips when user is not found", async () => {
+      const { service, users } = makeService();
+      users.findById.mockResolvedValueOnce(null);
+
+      const sent = await service.sendMonthlyInsight("missing", 4, 2026);
+
+      expect(sent).toBe(false);
+      expect(mockPushMessage).not.toHaveBeenCalled();
+    });
+
+    it("pushes LINE message with formatted insight to user's lineUserId", async () => {
+      const { service, transactions, users } = makeService();
+      users.findById.mockResolvedValueOnce(
+        makeUser({ id: "user-1", lineUserId: "Uabc" }),
+      );
+      const food = makeCategory({ id: "cat-food", name: "อาหาร" });
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 2000, category: food }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      const sent = await service.sendMonthlyInsight("user-1", 4, 2026);
+
+      expect(sent).toBe(true);
+      expect(mockPushMessage).toHaveBeenCalledTimes(1);
+      const req = mockPushMessage.mock.calls[0][0] as {
+        to: string;
+        messages: { type: string; text: string }[];
+      };
+      expect(req.to).toBe("Uabc");
+      expect(req.messages[0].type).toBe("text");
+      expect(req.messages[0].text).toContain("สรุปเดือน");
+      expect(req.messages[0].text).toContain("฿2,000.00");
+      expect(req.messages[0].text).toContain("อาหาร");
+    });
+
+    it("truncates message over 5000 chars with ellipsis", async () => {
+      const { service, transactions, users } = makeService();
+      users.findById.mockResolvedValueOnce(makeUser({ lineUserId: "Uabc" }));
+      transactions.findInRange.mockResolvedValue([]);
+
+      mockCreate.mockReset();
+      mockCreate.mockResolvedValueOnce(textResponse("x".repeat(6000)));
+
+      await service.sendMonthlyInsight("user-1", 4, 2026);
+
+      const req = mockPushMessage.mock.calls[0][0] as {
+        messages: { text: string }[];
+      };
+      expect(req.messages[0].text.length).toBe(5000);
+      expect(req.messages[0].text.endsWith("…")).toBe(true);
+    });
+  });
+
+  describe("runMonthlyBroadcast", () => {
+    beforeEach(() => {
+      jest.useFakeTimers({ doNotFake: ["setImmediate", "nextTick"] });
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("sends previous month insight to all users with lineUserId", async () => {
+      jest.setSystemTime(new Date(2026, 3, 1, 9, 0, 0));
+      const { service, transactions, users } = makeService();
+      users.findAllWithLineUserId.mockResolvedValueOnce([
+        makeUser({ id: "u1", lineUserId: "U1" }),
+        makeUser({ id: "u2", lineUserId: "U2" }),
+      ]);
+      users.findById
+        .mockResolvedValueOnce(makeUser({ id: "u1", lineUserId: "U1" }))
+        .mockResolvedValueOnce(makeUser({ id: "u2", lineUserId: "U2" }));
+      transactions.findInRange.mockResolvedValue([]);
+
+      await service.runMonthlyBroadcast();
+
+      expect(transactions.findInRange).toHaveBeenNthCalledWith(
+        1,
+        "u1",
+        new Date(2026, 2, 1, 0, 0, 0, 0),
+        new Date(2026, 3, 1, 0, 0, 0, 0),
+      );
+      expect(mockPushMessage).toHaveBeenCalledTimes(2);
+      expect(
+        (mockPushMessage.mock.calls[0][0] as { to: string }).to,
+      ).toBe("U1");
+      expect(
+        (mockPushMessage.mock.calls[1][0] as { to: string }).to,
+      ).toBe("U2");
+    });
+
+    it("wraps to December of previous year when running on January 1", async () => {
+      jest.setSystemTime(new Date(2026, 0, 1, 9, 0, 0));
+      const { service, transactions, users } = makeService();
+      users.findAllWithLineUserId.mockResolvedValueOnce([
+        makeUser({ id: "u1", lineUserId: "U1" }),
+      ]);
+      users.findById.mockResolvedValueOnce(
+        makeUser({ id: "u1", lineUserId: "U1" }),
+      );
+      transactions.findInRange.mockResolvedValue([]);
+
+      await service.runMonthlyBroadcast();
+
+      expect(transactions.findInRange).toHaveBeenNthCalledWith(
+        1,
+        "u1",
+        new Date(2025, 11, 1, 0, 0, 0, 0),
+        new Date(2026, 0, 1, 0, 0, 0, 0),
+      );
+    });
+
+    it("continues to remaining users after a push error", async () => {
+      jest.setSystemTime(new Date(2026, 3, 1, 9, 0, 0));
+      const { service, transactions, users } = makeService();
+      users.findAllWithLineUserId.mockResolvedValueOnce([
+        makeUser({ id: "u1", lineUserId: "U1" }),
+        makeUser({ id: "u2", lineUserId: "U2" }),
+      ]);
+      users.findById
+        .mockResolvedValueOnce(makeUser({ id: "u1", lineUserId: "U1" }))
+        .mockResolvedValueOnce(makeUser({ id: "u2", lineUserId: "U2" }));
+      transactions.findInRange.mockResolvedValue([]);
+      mockPushMessage
+        .mockRejectedValueOnce(new Error("line down"))
+        .mockResolvedValueOnce({});
+
+      jest
+        .spyOn(
+          (service as unknown as { logger: { error: (...a: unknown[]) => void } })
+            .logger,
+          "error",
+        )
+        .mockImplementation(() => undefined);
+
+      await service.runMonthlyBroadcast();
+
+      expect(mockPushMessage).toHaveBeenCalledTimes(2);
     });
   });
 });

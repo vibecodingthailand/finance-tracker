@@ -7,6 +7,7 @@ import type { ConfigService } from "@nestjs/config";
 import type { webhook } from "@line/bot-sdk";
 import type { User } from "@finance-tracker/database";
 import type { AuthRepository } from "../auth/auth.repository";
+import type { InsightService } from "../insight/insight.service";
 import type { LinkService } from "../link/link.service";
 import type {
   TransactionWithCategory,
@@ -29,6 +30,7 @@ interface Mocks {
   >;
   categorizer: jest.Mocked<Pick<CategorizerService, "categorize">>;
   links: jest.Mocked<Pick<LinkService, "consumeCode">>;
+  insight: jest.Mocked<Pick<InsightService, "getMonthlyData">>;
 }
 
 function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
@@ -53,6 +55,9 @@ function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
     links: {
       consumeCode: jest.fn(),
     } as unknown as Mocks["links"],
+    insight: {
+      getMonthlyData: jest.fn(),
+    } as unknown as Mocks["insight"],
   };
 
   const service = new LineService(
@@ -61,6 +66,7 @@ function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
     mocks.transactions as unknown as TransactionsRepository,
     mocks.categorizer as unknown as CategorizerService,
     mocks.links as unknown as LinkService,
+    mocks.insight as unknown as InsightService,
   );
 
   const reply: ReplyFn = jest.fn().mockResolvedValue({});
@@ -266,6 +272,46 @@ describe("LineService", () => {
       expect(text).toContain("รายรับ: 30,000.00 บาท");
       expect(text).toContain("รายจ่าย: 5,000.00 บาท");
       expect(text).toContain("คงเหลือ: 25,000.00 บาท");
+    });
+
+    it("'วิเคราะห์' returns monthly insight for the current month", async () => {
+      const { service, reply, mocks } = makeService();
+      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.insight.getMonthlyData.mockResolvedValueOnce({
+        month: 4,
+        year: 2026,
+        totalIncome: 30000,
+        totalExpense: 5000,
+        balance: 25000,
+        savingsRate: 83.33,
+        byCategoryIncome: [],
+        byCategoryExpense: [
+          {
+            categoryId: "c-food",
+            name: "อาหาร",
+            icon: "u",
+            total: 5000,
+            count: 3,
+            percentage: 100,
+          },
+        ],
+        anomalies: [],
+        summary: "เดือนนี้ออมได้เยอะ 🎉",
+      });
+
+      service.processEvents([textMessageEvent("วิเคราะห์")]);
+      await flushMicrotasks();
+
+      expect(mocks.insight.getMonthlyData).toHaveBeenCalledWith(
+        "user-1",
+        4,
+        2026,
+      );
+      const text = getReplyText(reply);
+      expect(text).toContain("สรุปเดือน");
+      expect(text).toContain("฿30,000.00");
+      expect(text).toContain("อาหาร");
+      expect(text).toContain("เดือนนี้ออมได้เยอะ");
     });
 
     it("'ยกเลิก' deletes latest transaction and confirms", async () => {

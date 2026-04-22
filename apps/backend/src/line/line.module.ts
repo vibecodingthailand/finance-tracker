@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { CategoriesModule } from "../categories/categories.module";
+import { InsightModule } from "../insight/insight.module";
 import { LinkModule } from "../link/link.module";
 import { TransactionsModule } from "../transactions/transactions.module";
 import { CategorizerService } from "./categorizer/categorizer.service";
@@ -9,7 +10,13 @@ import { LineService } from "./line.service";
 import { LineSignatureGuard } from "./line.signature.guard";
 
 @Module({
-  imports: [AuthModule, CategoriesModule, TransactionsModule, LinkModule],
+  imports: [
+    AuthModule,
+    CategoriesModule,
+    TransactionsModule,
+    LinkModule,
+    InsightModule,
+  ],
   controllers: [LineController],
   providers: [LineService, LineSignatureGuard, CategorizerService],
   exports: [CategorizerService],

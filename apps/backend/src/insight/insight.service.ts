@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { messagingApi } from "@line/bot-sdk";
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { Cron } from "@nestjs/schedule";
 import {
   CategoryAnomaly,
   CategoryInsightBreakdown,
@@ -8,6 +10,7 @@ import {
   TransactionType,
 } from "@finance-tracker/shared";
 import type { Prisma } from "@finance-tracker/database";
+import { AuthRepository } from "../auth/auth.repository";
 import {
   TransactionWithCategory,
   TransactionsRepository,
@@ -17,6 +20,7 @@ const ANOMALY_THRESHOLD_PERCENTAGE = 30;
 const SUMMARY_MODEL = "claude-haiku-4-5";
 const SUMMARY_MAX_TOKENS = 400;
 const TOP_CATEGORIES_IN_PROMPT = 5;
+const LINE_TEXT_MAX_LENGTH = 5000;
 
 interface CategoryBucket {
   categoryId: string;
@@ -40,13 +44,21 @@ type AggregatedInsight = Omit<MonthlyInsightData, "summary">;
 export class InsightService {
   private readonly logger = new Logger(InsightService.name);
   private readonly client: Anthropic;
+  private readonly lineClient: messagingApi.MessagingApiClient;
 
   constructor(
     config: ConfigService,
     private readonly transactions: TransactionsRepository,
+    private readonly users: AuthRepository,
   ) {
     const apiKey = config.getOrThrow<string>("ANTHROPIC_API_KEY");
     this.client = new Anthropic({ apiKey });
+    const channelAccessToken = config.getOrThrow<string>(
+      "LINE_CHANNEL_ACCESS_TOKEN",
+    );
+    this.lineClient = new messagingApi.MessagingApiClient({
+      channelAccessToken,
+    });
   }
 
   async getMonthlyData(
@@ -118,6 +130,44 @@ export class InsightService {
       .trim();
 
     return text || null;
+  }
+
+  async sendMonthlyInsight(
+    userId: string,
+    month: number,
+    year: number,
+  ): Promise<boolean> {
+    const user = await this.users.findById(userId);
+    if (!user?.lineUserId) {
+      return false;
+    }
+    const data = await this.getMonthlyData(userId, month, year);
+    const text = truncateForLine(formatInsightForLine(data));
+    await this.lineClient.pushMessage({
+      to: user.lineUserId,
+      messages: [{ type: "text", text }],
+    });
+    return true;
+  }
+
+  @Cron("0 9 1 * *")
+  async runMonthlyBroadcast(): Promise<void> {
+    const now = new Date();
+    const { month, year } = previousMonthOf(now);
+    const users = await this.users.findAllWithLineUserId();
+    this.logger.log(
+      `Broadcasting monthly insight ${month}/${year} to ${users.length} user(s)`,
+    );
+    for (const user of users) {
+      try {
+        await this.sendMonthlyInsight(user.id, month, year);
+      } catch (err) {
+        this.logger.error(
+          `Failed to send monthly insight to user ${user.id}`,
+          err instanceof Error ? err.stack : String(err),
+        );
+      }
+    }
   }
 
   private validatePeriod(month: number, year: number): void {
@@ -368,4 +418,41 @@ function round2(n: number): number {
 
 function amountToNumber(amount: Prisma.Decimal | number): number {
   return typeof amount === "number" ? amount : amount.toNumber();
+}
+
+export function formatInsightForLine(data: MonthlyInsightData): string {
+  const lines: string[] = [];
+  lines.push(`📊 สรุปเดือน${formatThaiMonth(data.month, data.year)}`);
+  lines.push("");
+  lines.push(`รายรับ: ${formatMoney(data.totalIncome)}`);
+  lines.push(`รายจ่าย: ${formatMoney(data.totalExpense)}`);
+  lines.push(`คงเหลือ: ${formatMoney(data.balance)}`);
+  lines.push(`อัตราการออม: ${data.savingsRate}%`);
+
+  if (data.byCategoryExpense.length > 0) {
+    lines.push("", "หมวดรายจ่ายสูงสุด:");
+    for (const c of data.byCategoryExpense.slice(0, TOP_CATEGORIES_IN_PROMPT)) {
+      lines.push(`• ${c.name} ${formatMoney(c.total)} (${c.percentage}%)`);
+    }
+  }
+
+  if (data.summary) {
+    lines.push("", data.summary);
+  }
+
+  return lines.join("\n");
+}
+
+export function truncateForLine(text: string): string {
+  if (text.length <= LINE_TEXT_MAX_LENGTH) return text;
+  const ellipsis = "…";
+  return text.slice(0, LINE_TEXT_MAX_LENGTH - ellipsis.length) + ellipsis;
+}
+
+function previousMonthOf(date: Date): { month: number; year: number } {
+  const m = date.getMonth();
+  if (m === 0) {
+    return { month: 12, year: date.getFullYear() - 1 };
+  }
+  return { month: m, year: date.getFullYear() };
 }

@@ -10,6 +10,11 @@ import { messagingApi, webhook } from "@line/bot-sdk";
 import { TransactionType } from "@finance-tracker/shared";
 import type { User } from "@finance-tracker/database";
 import { AuthRepository } from "../auth/auth.repository";
+import {
+  InsightService,
+  formatInsightForLine,
+  truncateForLine,
+} from "../insight/insight.service";
 import { LinkService } from "../link/link.service";
 import { TransactionsRepository } from "../transactions/transactions.repository";
 import { CategorizerService } from "./categorizer/categorizer.service";
@@ -24,6 +29,7 @@ const HELP_TEXT = [
   "• บันทึกรายรับ: \"เงินเดือน 30000\"",
   "• \"สรุป\" = ยอดวันนี้",
   "• \"เดือนนี้\" = ยอดเดือนนี้",
+  "• \"วิเคราะห์\" = สรุปรายเดือน + คำแนะนำ",
   "• \"ยกเลิก\" = ลบรายการล่าสุด",
   "• \"เชื่อม XXXXXX\" = เชื่อมบัญชีกับเว็บ",
 ].join("\n");
@@ -41,6 +47,7 @@ export class LineService {
     private readonly transactions: TransactionsRepository,
     private readonly categorizer: CategorizerService,
     private readonly links: LinkService,
+    private readonly insight: InsightService,
   ) {
     const channelAccessToken = config.getOrThrow<string>(
       "LINE_CHANNEL_ACCESS_TOKEN",
@@ -145,11 +152,23 @@ export class LineService {
         return this.summarizeToday(userId);
       case "เดือนนี้":
         return this.summarizeMonth(userId);
+      case "วิเคราะห์":
+        return this.analyzeMonth(userId);
       case "ยกเลิก":
         return this.undoLatest(userId);
       default:
         return HELP_TEXT;
     }
+  }
+
+  private async analyzeMonth(userId: string): Promise<string> {
+    const now = new Date();
+    const data = await this.insight.getMonthlyData(
+      userId,
+      now.getMonth() + 1,
+      now.getFullYear(),
+    );
+    return truncateForLine(formatInsightForLine(data));
   }
 
   private async summarizeToday(userId: string): Promise<string> {
