@@ -13,12 +13,15 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.enableCors({
-    origin: ["http://localhost:5173"],
-    credentials: true,
-  });
-
   const config = app.get(ConfigService);
+  const corsOrigins = config.get<string>("CORS_ORIGINS");
+  if (corsOrigins) {
+    app.enableCors({
+      origin: corsOrigins.split(",").map((s) => s.trim()),
+      credentials: true,
+    });
+  }
+
   const port = config.get<number>("PORT") ?? 3000;
   await app.listen(port);
   console.log(`Backend running on http://localhost:${port}/api`);
