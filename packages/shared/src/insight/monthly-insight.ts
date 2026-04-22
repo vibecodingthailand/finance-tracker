@@ -29,4 +29,5 @@ export interface MonthlyInsightData {
   byCategoryIncome: CategoryInsightBreakdown[];
   byCategoryExpense: CategoryInsightBreakdown[];
   anomalies: CategoryAnomaly[];
+  summary: string;
 }

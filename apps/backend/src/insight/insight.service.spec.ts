@@ -1,7 +1,16 @@
 import { BadRequestException } from "@nestjs/common";
-import { Test } from "@nestjs/testing";
+import type { ConfigService } from "@nestjs/config";
 import { TransactionType } from "@finance-tracker/shared";
-import { TransactionsRepository } from "../transactions/transactions.repository";
+import type { TransactionsRepository } from "../transactions/transactions.repository";
+
+const mockCreate = jest.fn();
+jest.mock("@anthropic-ai/sdk", () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    messages: { create: mockCreate },
+  })),
+}));
+
 import { InsightService } from "./insight.service";
 
 type CategoryRow = {
@@ -59,35 +68,38 @@ function makeTransaction(
   };
 }
 
+function textResponse(text: string): unknown {
+  return { content: [{ type: "text", text }] };
+}
+
+function makeService(): {
+  service: InsightService;
+  transactions: jest.Mocked<
+    Pick<TransactionsRepository, "findInRange">
+  >;
+} {
+  const config = {
+    getOrThrow: jest.fn().mockReturnValue("fake-key"),
+  } as unknown as ConfigService;
+  const transactions = {
+    findInRange: jest.fn(),
+  } as unknown as jest.Mocked<Pick<TransactionsRepository, "findInRange">>;
+  const service = new InsightService(
+    config,
+    transactions as unknown as TransactionsRepository,
+  );
+  return { service, transactions };
+}
+
+beforeEach(() => {
+  mockCreate.mockReset();
+  mockCreate.mockResolvedValue(textResponse("💡 สรุปจาก Claude (mock)"));
+});
+
 describe("InsightService", () => {
-  let service: InsightService;
-  let transactions: jest.Mocked<TransactionsRepository>;
-
-  beforeEach(async () => {
-    const transactionsMock = {
-      findById: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      list: jest.fn(),
-      findInRange: jest.fn(),
-      findLatestForUser: jest.fn(),
-      findForExport: jest.fn(),
-    };
-
-    const moduleRef = await Test.createTestingModule({
-      providers: [
-        InsightService,
-        { provide: TransactionsRepository, useValue: transactionsMock },
-      ],
-    }).compile();
-
-    service = moduleRef.get(InsightService);
-    transactions = moduleRef.get(TransactionsRepository);
-  });
-
-  describe("getMonthlyData", () => {
+  describe("getMonthlyData – aggregation", () => {
     it("queries current month and previous month ranges", async () => {
+      const { service, transactions } = makeService();
       transactions.findInRange.mockResolvedValue([]);
 
       await service.getMonthlyData("user-1", 4, 2026);
@@ -107,6 +119,7 @@ describe("InsightService", () => {
     });
 
     it("wraps to previous year when month is January", async () => {
+      const { service, transactions } = makeService();
       transactions.findInRange.mockResolvedValue([]);
 
       await service.getMonthlyData("user-1", 1, 2026);
@@ -120,6 +133,7 @@ describe("InsightService", () => {
     });
 
     it("aggregates totals, balance, savings rate and category breakdown", async () => {
+      const { service, transactions } = makeService();
       const food = makeCategory({ id: "cat-food", name: "อาหาร", icon: "u" });
       const travel = makeCategory({
         id: "cat-travel",
@@ -180,9 +194,9 @@ describe("InsightService", () => {
     });
 
     it("returns zero savings rate when no income", async () => {
-      const food = makeCategory();
+      const { service, transactions } = makeService();
       transactions.findInRange.mockResolvedValueOnce([
-        makeTransaction({ amount: 500, category: food }),
+        makeTransaction({ amount: 500, category: makeCategory() }),
       ] as never);
       transactions.findInRange.mockResolvedValueOnce([] as never);
 
@@ -191,8 +205,11 @@ describe("InsightService", () => {
       expect(result.savingsRate).toBe(0);
       expect(result.balance).toBe(-500);
     });
+  });
 
-    it("flags category with >30% increase as anomaly", async () => {
+  describe("getMonthlyData – anomaly detection", () => {
+    it("flags category with >30% increase", async () => {
+      const { service, transactions } = makeService();
       const food = makeCategory({ id: "cat-food", name: "อาหาร", icon: "u" });
 
       transactions.findInRange.mockResolvedValueOnce([
@@ -218,6 +235,7 @@ describe("InsightService", () => {
     });
 
     it("does not flag category with <=30% change", async () => {
+      const { service, transactions } = makeService();
       const food = makeCategory();
       transactions.findInRange.mockResolvedValueOnce([
         makeTransaction({ amount: 1300, category: food }),
@@ -231,6 +249,7 @@ describe("InsightService", () => {
     });
 
     it("flags brand-new category (previous total 0) as anomaly", async () => {
+      const { service, transactions } = makeService();
       const travel = makeCategory({ id: "cat-travel", name: "เดินทาง" });
 
       transactions.findInRange.mockResolvedValueOnce([
@@ -250,6 +269,7 @@ describe("InsightService", () => {
     });
 
     it("flags disappearing category (current total 0) as anomaly", async () => {
+      const { service, transactions } = makeService();
       const travel = makeCategory({ id: "cat-travel", name: "เดินทาง" });
 
       transactions.findInRange.mockResolvedValueOnce([] as never);
@@ -269,6 +289,7 @@ describe("InsightService", () => {
     });
 
     it("sorts anomalies by absolute change desc", async () => {
+      const { service, transactions } = makeService();
       const food = makeCategory({ id: "cat-food", name: "อาหาร" });
       const travel = makeCategory({ id: "cat-travel", name: "เดินทาง" });
 
@@ -288,8 +309,11 @@ describe("InsightService", () => {
         "cat-food",
       ]);
     });
+  });
 
+  describe("getMonthlyData – validation", () => {
     it("rejects invalid month with 400", async () => {
+      const { service, transactions } = makeService();
       await expect(
         service.getMonthlyData("user-1", 0, 2026),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -300,9 +324,88 @@ describe("InsightService", () => {
     });
 
     it("rejects invalid year with 400", async () => {
+      const { service } = makeService();
       await expect(
         service.getMonthlyData("user-1", 4, 1999),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe("getMonthlyData – AI summary", () => {
+    it("uses Claude Haiku text as summary and passes formatted data", async () => {
+      const { service, transactions } = makeService();
+      const food = makeCategory({ id: "cat-food", name: "อาหาร", icon: "u" });
+      const salary = makeCategory({
+        id: "cat-salary",
+        name: "เงินเดือน",
+        type: TransactionType.INCOME,
+      });
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 30000, category: salary }),
+        makeTransaction({ amount: 2000, category: food }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      mockCreate.mockReset();
+      mockCreate.mockResolvedValueOnce(
+        textResponse(
+          "เดือนนี้คุณออมได้ ฿28,000.00 ดีมาก 🎉 ลองตั้งงบอาหารไม่เกิน ฿2,500 เดือนหน้าเพื่อรักษาสมดุลนี้",
+        ),
+      );
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.summary).toContain("฿28,000.00");
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      const call = mockCreate.mock.calls[0][0] as {
+        model: string;
+        max_tokens: number;
+        system: string;
+        messages: { role: string; content: string }[];
+      };
+      expect(call.model).toBe("claude-haiku-4-5");
+      expect(call.system).toContain("ที่ปรึกษาการเงิน");
+      const userPrompt = call.messages[0].content;
+      expect(userPrompt).toContain("รายรับรวม: ฿30,000.00");
+      expect(userPrompt).toContain("รายจ่ายรวม: ฿2,000.00");
+      expect(userPrompt).toContain("อาหาร");
+    });
+
+    it("falls back to structured number-only summary when Claude API throws", async () => {
+      const { service, transactions } = makeService();
+      const salary = makeCategory({
+        id: "cat-salary",
+        name: "เงินเดือน",
+        type: TransactionType.INCOME,
+      });
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 30000, category: salary }),
+        makeTransaction({ amount: 4000, category: makeCategory() }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      mockCreate.mockReset();
+      mockCreate.mockRejectedValueOnce(new Error("network"));
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.summary).toContain("฿30,000.00");
+      expect(result.summary).toContain("฿4,000.00");
+      expect(result.summary).toContain("฿26,000.00");
+      expect(result.summary).toMatch(/86\.67%/);
+    });
+
+    it("falls back when Claude returns empty text", async () => {
+      const { service, transactions } = makeService();
+      transactions.findInRange.mockResolvedValue([]);
+
+      mockCreate.mockReset();
+      mockCreate.mockResolvedValueOnce(textResponse("   "));
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.summary).toContain("รายรับ ฿0.00");
+      expect(result.summary).toContain("รายจ่าย ฿0.00");
     });
   });
 });
