@@ -1,10 +1,12 @@
 import { NestFactory } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
 import { ValidationPipe } from "@nestjs/common";
+import helmet from "helmet";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
+  app.use(helmet());
   app.setGlobalPrefix("api");
   app.useGlobalPipes(
     new ValidationPipe({
@@ -18,7 +20,7 @@ async function bootstrap() {
   if (corsOrigins) {
     app.enableCors({
       origin: corsOrigins.split(",").map((s) => s.trim()),
-      credentials: true,
+      credentials: false,
     });
   }
 

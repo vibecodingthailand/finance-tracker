@@ -236,7 +236,7 @@ function buildSummaryUserPrompt(data: AggregatedInsight): string {
     lines.push("", "หมวดรายจ่ายสูงสุด:");
     for (const c of data.byCategoryExpense.slice(0, TOP_CATEGORIES_IN_PROMPT)) {
       lines.push(
-        `- ${c.name}: ${formatMoney(c.total)} (${c.percentage}%, ${c.count} รายการ)`,
+        `- ${sanitizeCategoryName(c.name)}: ${formatMoney(c.total)} (${c.percentage}%, ${c.count} รายการ)`,
       );
     }
   }
@@ -245,7 +245,7 @@ function buildSummaryUserPrompt(data: AggregatedInsight): string {
     lines.push("", "หมวดรายรับ:");
     for (const c of data.byCategoryIncome.slice(0, TOP_CATEGORIES_IN_PROMPT)) {
       lines.push(
-        `- ${c.name}: ${formatMoney(c.total)} (${c.percentage}%, ${c.count} รายการ)`,
+        `- ${sanitizeCategoryName(c.name)}: ${formatMoney(c.total)} (${c.percentage}%, ${c.count} รายการ)`,
       );
     }
   }
@@ -256,12 +256,17 @@ function buildSummaryUserPrompt(data: AggregatedInsight): string {
       const kind = a.type === TransactionType.INCOME ? "รายรับ" : "รายจ่าย";
       const sign = a.changePercentage >= 0 ? "+" : "";
       lines.push(
-        `- ${a.name} (${kind}): ${formatMoney(a.previousTotal)} → ${formatMoney(a.currentTotal)} (${sign}${a.changePercentage}%)`,
+        `- ${sanitizeCategoryName(a.name)} (${kind}): ${formatMoney(a.previousTotal)} → ${formatMoney(a.currentTotal)} (${sign}${a.changePercentage}%)`,
       );
     }
   }
 
   return lines.join("\n");
+}
+
+function sanitizeCategoryName(name: string): string {
+  const stripped = name.replace(/[\r\n\t<>]/g, " ").trim();
+  return stripped.length > 60 ? stripped.slice(0, 60) : stripped;
 }
 
 function buildFallbackSummary(data: AggregatedInsight): string {

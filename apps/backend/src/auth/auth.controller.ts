@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import {
   AuthResponse,
   LoginDto,
@@ -14,11 +15,13 @@ import { AuthenticatedUser } from "./jwt.strategy";
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @Throttle({ default: { limit: 3, ttl: 3_600_000 } })
   @Post("register")
   register(@Body() dto: RegisterDto): Promise<AuthResponse> {
     return this.auth.register(dto);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post("login")
   @HttpCode(200)
   login(@Body() dto: LoginDto): Promise<AuthResponse> {

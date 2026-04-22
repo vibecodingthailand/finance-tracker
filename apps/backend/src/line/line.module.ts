@@ -8,6 +8,7 @@ import { CategorizerService } from "./categorizer/categorizer.service";
 import { LineController } from "./line.controller";
 import { LineService } from "./line.service";
 import { LineSignatureGuard } from "./line.signature.guard";
+import { WebhookEventRepository } from "./webhook-event.repository";
 
 @Module({
   imports: [
@@ -18,7 +19,12 @@ import { LineSignatureGuard } from "./line.signature.guard";
     InsightModule,
   ],
   controllers: [LineController],
-  providers: [LineService, LineSignatureGuard, CategorizerService],
+  providers: [
+    LineService,
+    LineSignatureGuard,
+    CategorizerService,
+    WebhookEventRepository,
+  ],
   exports: [CategorizerService],
 })
 export class LineModule {}

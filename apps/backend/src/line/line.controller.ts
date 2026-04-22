@@ -5,6 +5,7 @@ import {
   Post,
   UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { webhook } from "@line/bot-sdk";
 import { LineSignatureGuard } from "./line.signature.guard";
 import { LineService } from "./line.service";
@@ -13,6 +14,7 @@ import { LineService } from "./line.service";
 export class LineController {
   constructor(private readonly service: LineService) {}
 
+  @SkipThrottle()
   @Post("webhook")
   @UseGuards(LineSignatureGuard)
   @HttpCode(200)

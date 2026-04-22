@@ -15,12 +15,13 @@ import type {
 } from "../transactions/transactions.repository";
 import type { CategorizerService } from "./categorizer/categorizer.service";
 import { LineService } from "./line.service";
+import type { WebhookEventRepository } from "./webhook-event.repository";
 
 type ReplyFn = jest.Mock<Promise<unknown>, [unknown]>;
 
 interface Mocks {
   users: jest.Mocked<
-    Pick<AuthRepository, "findByLineUserId" | "createLineUser">
+    Pick<AuthRepository, "upsertLineUser">
   >;
   transactions: jest.Mocked<
     Pick<
@@ -31,6 +32,7 @@ interface Mocks {
   categorizer: jest.Mocked<Pick<CategorizerService, "categorize">>;
   links: jest.Mocked<Pick<LinkService, "consumeCode">>;
   insight: jest.Mocked<Pick<InsightService, "getMonthlyData">>;
+  webhookEvents: jest.Mocked<Pick<WebhookEventRepository, "tryClaim">>;
 }
 
 function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
@@ -40,8 +42,7 @@ function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
 
   const mocks: Mocks = {
     users: {
-      findByLineUserId: jest.fn(),
-      createLineUser: jest.fn(),
+      upsertLineUser: jest.fn(),
     } as unknown as Mocks["users"],
     transactions: {
       create: jest.fn(),
@@ -58,6 +59,9 @@ function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
     insight: {
       getMonthlyData: jest.fn(),
     } as unknown as Mocks["insight"],
+    webhookEvents: {
+      tryClaim: jest.fn().mockResolvedValue(true),
+    } as unknown as Mocks["webhookEvents"],
   };
 
   const service = new LineService(
@@ -67,6 +71,7 @@ function makeService(): { service: LineService; reply: ReplyFn; mocks: Mocks } {
     mocks.categorizer as unknown as CategorizerService,
     mocks.links as unknown as LinkService,
     mocks.insight as unknown as InsightService,
+    mocks.webhookEvents as unknown as WebhookEventRepository,
   );
 
   const reply: ReplyFn = jest.fn().mockResolvedValue({});
@@ -126,9 +131,8 @@ describe("LineService", () => {
   describe("user resolution", () => {
     it("creates a new user automatically when lineUserId is unknown", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(null);
       const created = makeUser({ id: "user-new", lineUserId: "Unew" });
-      mocks.users.createLineUser.mockResolvedValueOnce(created);
+      mocks.users.upsertLineUser.mockResolvedValueOnce(created);
       mocks.categorizer.categorize.mockResolvedValueOnce({
         id: "c-food",
         name: "อาหาร",
@@ -142,8 +146,7 @@ describe("LineService", () => {
       ]);
       await flushMicrotasks();
 
-      expect(mocks.users.findByLineUserId).toHaveBeenCalledWith("Unew");
-      expect(mocks.users.createLineUser).toHaveBeenCalledWith({
+      expect(mocks.users.upsertLineUser).toHaveBeenCalledWith({
         lineUserId: "Unew",
         name: expect.stringContaining("Unew"),
       });
@@ -155,7 +158,7 @@ describe("LineService", () => {
 
     it("reuses existing user when lineUserId is already mapped", async () => {
       const { service, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.categorizer.categorize.mockResolvedValueOnce({
         id: "c-food",
         name: "อาหาร",
@@ -167,14 +170,14 @@ describe("LineService", () => {
       service.processEvents([textMessageEvent("ข้าว 50")]);
       await flushMicrotasks();
 
-      expect(mocks.users.createLineUser).not.toHaveBeenCalled();
+      expect(mocks.users.upsertLineUser).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("transaction recording", () => {
     it("parses expense, categorizes, saves with source LINE, and confirms", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.categorizer.categorize.mockResolvedValueOnce({
         id: "c-food",
         name: "อาหาร",
@@ -204,7 +207,7 @@ describe("LineService", () => {
 
     it("routes income prefixes to INCOME and uses รายรับ verb", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.categorizer.categorize.mockResolvedValueOnce({
         id: "i-salary",
         name: "เงินเดือน",
@@ -239,7 +242,7 @@ describe("LineService", () => {
 
     it("'สรุป' sums today's income and expense", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.transactions.findInRange.mockResolvedValueOnce([
         { type: "INCOME", amount: 100 },
         { type: "EXPENSE", amount: 60 },
@@ -258,7 +261,7 @@ describe("LineService", () => {
 
     it("'เดือนนี้' sums the current month", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.transactions.findInRange.mockResolvedValueOnce([
         { type: "INCOME", amount: 30000 },
         { type: "EXPENSE", amount: 5000 },
@@ -276,7 +279,7 @@ describe("LineService", () => {
 
     it("'วิเคราะห์' returns monthly insight for the current month", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.insight.getMonthlyData.mockResolvedValueOnce({
         month: 4,
         year: 2026,
@@ -316,7 +319,7 @@ describe("LineService", () => {
 
     it("'ยกเลิก' deletes latest transaction and confirms", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.transactions.findLatestForUser.mockResolvedValueOnce({
         id: "t-last",
         type: "EXPENSE",
@@ -336,7 +339,7 @@ describe("LineService", () => {
 
     it("'ยกเลิก' replies gracefully when there is nothing to delete", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.transactions.findLatestForUser.mockResolvedValueOnce(null);
 
       service.processEvents([textMessageEvent("ยกเลิก")]);
@@ -348,7 +351,7 @@ describe("LineService", () => {
 
     it("replies with help text when command is unknown", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
 
       service.processEvents([textMessageEvent("สวัสดี")]);
       await flushMicrotasks();
@@ -367,7 +370,7 @@ describe("LineService", () => {
     it("consumes the code and confirms success", async () => {
       const { service, reply, mocks } = makeService();
       const user = makeUser();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(user);
+      mocks.users.upsertLineUser.mockResolvedValueOnce(user);
       mocks.links.consumeCode.mockResolvedValueOnce({ webUserId: "web-1" });
 
       service.processEvents([textMessageEvent("เชื่อม 123456")]);
@@ -384,7 +387,7 @@ describe("LineService", () => {
 
     it("replies with the exception message for invalid codes", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.links.consumeCode.mockRejectedValueOnce(
         new NotFoundException("โค้ดไม่ถูกต้อง"),
       );
@@ -397,7 +400,7 @@ describe("LineService", () => {
 
     it("replies with the exception message for expired codes", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.links.consumeCode.mockRejectedValueOnce(
         new BadRequestException("โค้ดหมดอายุแล้ว"),
       );
@@ -410,7 +413,7 @@ describe("LineService", () => {
 
     it("replies with the exception message for already-used codes", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.links.consumeCode.mockRejectedValueOnce(
         new ConflictException("โค้ดนี้ถูกใช้แล้ว"),
       );
@@ -423,7 +426,7 @@ describe("LineService", () => {
 
     it("treats non-6-digit link attempts as a transaction fallback", async () => {
       const { service, mocks } = makeService();
-      mocks.users.findByLineUserId.mockResolvedValueOnce(makeUser());
+      mocks.users.upsertLineUser.mockResolvedValueOnce(makeUser());
       mocks.categorizer.categorize.mockResolvedValueOnce({
         id: "c-misc",
         name: "อื่นๆ",
@@ -458,7 +461,7 @@ describe("LineService", () => {
       await flushMicrotasks();
 
       expect(reply).not.toHaveBeenCalled();
-      expect(mocks.users.findByLineUserId).not.toHaveBeenCalled();
+      expect(mocks.users.upsertLineUser).not.toHaveBeenCalled();
     });
 
     it("ignores events with no replyToken", async () => {
@@ -468,12 +471,12 @@ describe("LineService", () => {
       await flushMicrotasks();
 
       expect(reply).not.toHaveBeenCalled();
-      expect(mocks.users.findByLineUserId).not.toHaveBeenCalled();
+      expect(mocks.users.upsertLineUser).not.toHaveBeenCalled();
     });
 
     it("swallows handler errors so the webhook still returns 200", async () => {
       const { service, reply, mocks } = makeService();
-      mocks.users.findByLineUserId.mockRejectedValueOnce(new Error("boom"));
+      mocks.users.upsertLineUser.mockRejectedValueOnce(new Error("boom"));
       const logError = jest
         .spyOn(
           (service as unknown as { logger: { error: (...a: unknown[]) => void } })
@@ -488,6 +491,18 @@ describe("LineService", () => {
       await flushMicrotasks();
 
       expect(logError).toHaveBeenCalled();
+      expect(reply).not.toHaveBeenCalled();
+    });
+
+    it("skips duplicate webhook events by eventId", async () => {
+      const { service, reply, mocks } = makeService();
+      mocks.webhookEvents.tryClaim.mockResolvedValueOnce(false);
+
+      service.processEvents([textMessageEvent("กาแฟ 65")]);
+      await flushMicrotasks();
+
+      expect(mocks.webhookEvents.tryClaim).toHaveBeenCalledWith("evt-1", "LINE");
+      expect(mocks.users.upsertLineUser).not.toHaveBeenCalled();
       expect(reply).not.toHaveBeenCalled();
     });
   });

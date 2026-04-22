@@ -1,4 +1,5 @@
 import { Controller, Get, ParseIntPipe, Query, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { MonthlyInsightData } from "@finance-tracker/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
@@ -10,6 +11,7 @@ import { InsightService } from "./insight.service";
 export class InsightController {
   constructor(private readonly service: InsightService) {}
 
+  @Throttle({ default: { limit: 20, ttl: 3_600_000 } })
   @Get()
   get(
     @CurrentUser() user: AuthenticatedUser,

@@ -22,6 +22,7 @@ import {
   parseThaiMessage,
   type ParsedThaiMessage,
 } from "./parsers/thai-message.parser";
+import { WebhookEventRepository } from "./webhook-event.repository";
 
 const HELP_TEXT = [
   "วิธีใช้:",
@@ -48,6 +49,7 @@ export class LineService {
     private readonly categorizer: CategorizerService,
     private readonly links: LinkService,
     private readonly insight: InsightService,
+    private readonly webhookEvents: WebhookEventRepository,
   ) {
     const channelAccessToken = config.getOrThrow<string>(
       "LINE_CHANNEL_ACCESS_TOKEN",
@@ -57,13 +59,25 @@ export class LineService {
 
   processEvents(events: webhook.Event[]): void {
     for (const event of events) {
-      this.handleEvent(event).catch((err: unknown) => {
+      this.processOne(event).catch((err: unknown) => {
         this.logger.error(
           `Failed to handle LINE event type=${event.type}`,
           err instanceof Error ? err.stack : String(err),
         );
       });
     }
+  }
+
+  private async processOne(event: webhook.Event): Promise<void> {
+    const eventId = event.webhookEventId;
+    if (eventId) {
+      const claimed = await this.webhookEvents.tryClaim(eventId, "LINE");
+      if (!claimed) {
+        this.logger.log(`Skipped duplicate LINE event ${eventId}`);
+        return;
+      }
+    }
+    await this.handleEvent(event);
   }
 
   private async handleEvent(event: webhook.Event): Promise<void> {
@@ -84,9 +98,7 @@ export class LineService {
   }
 
   private async findOrCreateUser(lineUserId: string): Promise<User> {
-    const existing = await this.users.findByLineUserId(lineUserId);
-    if (existing) return existing;
-    return this.users.createLineUser({
+    return this.users.upsertLineUser({
       lineUserId,
       name: `LINE ${lineUserId.slice(0, 8)}`,
     });

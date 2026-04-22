@@ -1,4 +1,5 @@
 import { Controller, Post, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import type { LinkCodeResponse } from "@finance-tracker/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
@@ -10,6 +11,7 @@ import { LinkService } from "./link.service";
 export class LinkController {
   constructor(private readonly service: LinkService) {}
 
+  @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
   @Post("code")
   createCode(
     @CurrentUser() user: AuthenticatedUser,

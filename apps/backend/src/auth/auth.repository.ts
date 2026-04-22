@@ -46,4 +46,20 @@ export class AuthRepository {
       },
     });
   }
+
+  upsertLineUser(input: {
+    lineUserId: string;
+    name: string;
+  }): Promise<User> {
+    return this.prisma.user.upsert({
+      where: { lineUserId: input.lineUserId },
+      update: {},
+      create: {
+        email: `line:${input.lineUserId}@placeholder.local`,
+        password: randomBytes(32).toString("hex"),
+        name: input.name,
+        lineUserId: input.lineUserId,
+      },
+    });
+  }
 }

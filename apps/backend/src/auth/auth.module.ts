@@ -18,10 +18,22 @@ import { JwtStrategy } from "./jwt.strategy";
         if (!secret) {
           throw new Error("JWT_SECRET is not set");
         }
+        const isProduction = config.get<string>("NODE_ENV") === "production";
+        if (isProduction) {
+          if (secret === "change-me-in-production") {
+            throw new Error("JWT_SECRET must not use the default value in production");
+          }
+          if (secret.length < 32) {
+            throw new Error("JWT_SECRET must be at least 32 characters in production");
+          }
+        }
         const expiresIn = config.get<string>("JWT_EXPIRES_IN") ?? "7d";
         return {
           secret,
-          signOptions: { expiresIn: expiresIn as `${number}${"s" | "m" | "h" | "d"}` },
+          signOptions: {
+            expiresIn: expiresIn as `${number}${"s" | "m" | "h" | "d"}`,
+            algorithm: "HS256",
+          },
         };
       },
     }),
