@@ -241,6 +241,22 @@ describe("InsightService", () => {
       ]);
     });
 
+    it("returns zeroed aggregation for an empty month", async () => {
+      const { service, transactions } = makeService();
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.totalIncome).toBe(0);
+      expect(result.totalExpense).toBe(0);
+      expect(result.balance).toBe(0);
+      expect(result.savingsRate).toBe(0);
+      expect(result.byCategoryIncome).toEqual([]);
+      expect(result.byCategoryExpense).toEqual([]);
+      expect(result.anomalies).toEqual([]);
+    });
+
     it("returns zero savings rate when no income", async () => {
       const { service, transactions } = makeService();
       transactions.findInRange.mockResolvedValueOnce([
@@ -441,6 +457,47 @@ describe("InsightService", () => {
       expect(result.summary).toContain("฿4,000.00");
       expect(result.summary).toContain("฿26,000.00");
       expect(result.summary).toMatch(/86\.67%/);
+    });
+
+    it("falls back when Claude throws an APIError and logs status+type without leaking message", async () => {
+      const { service, transactions } = makeService();
+      transactions.findInRange.mockResolvedValue([]);
+
+      mockCreate.mockReset();
+      mockCreate.mockRejectedValueOnce(
+        new MockAPIError(429, "rate_limit_error", "sk-ant-secret-should-not-leak"),
+      );
+
+      const warnSpy = jest
+        .spyOn(
+          (service as unknown as { logger: { warn: (...a: unknown[]) => void } })
+            .logger,
+          "warn",
+        )
+        .mockImplementation(() => undefined);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.summary).toContain("รายรับ ฿0.00");
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const logged = String(warnSpy.mock.calls[0][0]);
+      expect(logged).toContain("APIError");
+      expect(logged).toContain("status=429");
+      expect(logged).toContain("type=rate_limit_error");
+      expect(logged).not.toContain("sk-ant-secret-should-not-leak");
+    });
+
+    it("falls back when Claude response has no text blocks", async () => {
+      const { service, transactions } = makeService();
+      transactions.findInRange.mockResolvedValue([]);
+
+      mockCreate.mockReset();
+      mockCreate.mockResolvedValueOnce({ content: [] });
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.summary).toContain("รายรับ ฿0.00");
+      expect(result.summary).toContain("รายจ่าย ฿0.00");
     });
 
     it("falls back when Claude returns empty text", async () => {
