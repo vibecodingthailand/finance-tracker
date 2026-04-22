@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.PROD ? "/api" : "http://localhost:3000/api";
+const API_BASE_URL = import.meta.env.PROD
+  ? `${window.location.origin}/api`
+  : "http://localhost:3000/api";
 const TOKEN_STORAGE_KEY = "finance-tracker.token";
 
 type UnauthorizedHandler = () => void;
