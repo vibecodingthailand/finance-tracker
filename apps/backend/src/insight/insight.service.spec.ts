@@ -6,11 +6,22 @@ import type { AuthRepository } from "../auth/auth.repository";
 import type { TransactionsRepository } from "../transactions/transactions.repository";
 
 const mockCreate = jest.fn();
+class MockAPIError extends Error {
+  constructor(
+    readonly status: number,
+    readonly type: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "APIError";
+  }
+}
 jest.mock("@anthropic-ai/sdk", () => ({
   __esModule: true,
   default: jest.fn().mockImplementation(() => ({
     messages: { create: mockCreate },
   })),
+  APIError: MockAPIError,
 }));
 
 const mockPushMessage = jest.fn();
@@ -596,6 +607,65 @@ describe("InsightService", () => {
       await service.runMonthlyBroadcast();
 
       expect(mockPushMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it("skips second run while the first is still in progress", async () => {
+      jest.setSystemTime(new Date(2026, 3, 1, 9, 0, 0));
+      const { service, transactions, users } = makeService();
+
+      let releaseFirstFind!: (value: User[]) => void;
+      users.findAllWithLineUserId.mockReturnValueOnce(
+        new Promise<User[]>((resolve) => {
+          releaseFirstFind = resolve;
+        }),
+      );
+      transactions.findInRange.mockResolvedValue([]);
+
+      const warnSpy = jest
+        .spyOn(
+          (service as unknown as { logger: { warn: (...a: unknown[]) => void } })
+            .logger,
+          "warn",
+        )
+        .mockImplementation(() => undefined);
+
+      const first = service.runMonthlyBroadcast();
+      await service.runMonthlyBroadcast();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("still in progress"),
+      );
+      expect(users.findAllWithLineUserId).toHaveBeenCalledTimes(1);
+
+      releaseFirstFind([]);
+      await first;
+    });
+  });
+
+  describe("Claude error logging", () => {
+    it("does not log err.message from Claude failures", async () => {
+      const { service, transactions } = makeService();
+      transactions.findInRange.mockResolvedValue([]);
+
+      mockCreate.mockReset();
+      mockCreate.mockRejectedValueOnce(
+        new Error("sk-ant-api03-xxx-secret-hint"),
+      );
+
+      const warnSpy = jest
+        .spyOn(
+          (service as unknown as { logger: { warn: (...a: unknown[]) => void } })
+            .logger,
+          "warn",
+        )
+        .mockImplementation(() => undefined);
+
+      await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const logged = String(warnSpy.mock.calls[0][0]);
+      expect(logged).not.toContain("sk-ant-api03-xxx-secret-hint");
+      expect(logged).toContain("Error");
     });
   });
 });

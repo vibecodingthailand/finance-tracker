@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import { messagingApi } from "@line/bot-sdk";
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -45,6 +45,7 @@ export class InsightService {
   private readonly logger = new Logger(InsightService.name);
   private readonly client: Anthropic;
   private readonly lineClient: messagingApi.MessagingApiClient;
+  private isBroadcasting = false;
 
   constructor(
     config: ConfigService,
@@ -107,7 +108,7 @@ export class InsightService {
       if (ai) return ai;
     } catch (err) {
       this.logger.warn(
-        `Claude summary failed, using fallback: ${err instanceof Error ? err.message : String(err)}`,
+        `Claude summary failed, using fallback: ${describeClaudeError(err)}`,
       );
     }
     return buildFallbackSummary(data);
@@ -152,21 +153,32 @@ export class InsightService {
 
   @Cron("0 9 1 * *")
   async runMonthlyBroadcast(): Promise<void> {
-    const now = new Date();
-    const { month, year } = previousMonthOf(now);
-    const users = await this.users.findAllWithLineUserId();
-    this.logger.log(
-      `Broadcasting monthly insight ${month}/${year} to ${users.length} user(s)`,
-    );
-    for (const user of users) {
-      try {
-        await this.sendMonthlyInsight(user.id, month, year);
-      } catch (err) {
-        this.logger.error(
-          `Failed to send monthly insight to user ${user.id}`,
-          err instanceof Error ? err.stack : String(err),
-        );
+    if (this.isBroadcasting) {
+      this.logger.warn(
+        "Monthly broadcast skipped: previous run still in progress",
+      );
+      return;
+    }
+    this.isBroadcasting = true;
+    try {
+      const now = new Date();
+      const { month, year } = previousMonthOf(now);
+      const users = await this.users.findAllWithLineUserId();
+      this.logger.log(
+        `Broadcasting monthly insight ${month}/${year} to ${users.length} user(s)`,
+      );
+      for (const user of users) {
+        try {
+          await this.sendMonthlyInsight(user.id, month, year);
+        } catch (err) {
+          this.logger.error(
+            `Failed to send monthly insight to user ${user.id}`,
+            err instanceof Error ? err.stack : String(err),
+          );
+        }
       }
+    } finally {
+      this.isBroadcasting = false;
     }
   }
 
@@ -418,6 +430,16 @@ function round2(n: number): number {
 
 function amountToNumber(amount: Prisma.Decimal | number): number {
   return typeof amount === "number" ? amount : amount.toNumber();
+}
+
+function describeClaudeError(err: unknown): string {
+  if (err instanceof APIError) {
+    return `APIError(status=${err.status ?? "unknown"}, type=${err.type ?? "unknown"})`;
+  }
+  if (err instanceof Error) {
+    return err.name;
+  }
+  return "unknown";
 }
 
 export function formatInsightForLine(data: MonthlyInsightData): string {
