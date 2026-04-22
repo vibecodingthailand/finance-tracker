@@ -4,6 +4,7 @@ import AppLayout from "./layouts/AppLayout";
 import Budget from "./pages/Budget";
 import Categories from "./pages/Categories";
 import Dashboard from "./pages/Dashboard";
+import Insights from "./pages/Insights";
 import Login from "./pages/Login";
 import Recurring from "./pages/Recurring";
 import Register from "./pages/Register";
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="categories" element={<Categories />} />
             <Route path="recurring" element={<Recurring />} />
             <Route path="budget" element={<Budget />} />
+            <Route path="insights" element={<Insights />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

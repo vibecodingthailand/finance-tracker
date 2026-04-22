@@ -8,6 +8,7 @@ const navItems = [
   { to: "/transactions", label: "รายการ", end: false },
   { to: "/recurring", label: "รายการซ้ำ", end: false },
   { to: "/budget", label: "งบประมาณ", end: false },
+  { to: "/insights", label: "ข้อมูลเชิงลึก", end: false },
   { to: "/categories", label: "หมวดหมู่", end: false },
   { to: "/settings", label: "ตั้งค่า", end: false },
 ];
