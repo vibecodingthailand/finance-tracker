@@ -26,11 +26,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  transactions Transaction[]
-  categories   Category[]
-  recurrings   Recurring[]
-  budgets      Budget[]
-  linkCodes    LinkCode[]
+  transactions   Transaction[]
+  categories     Category[]
+  recurrings     Recurring[]
+  budgets        Budget[]
+  linkCodes      LinkCode[]
+  insightCaches  MonthlyInsightCache[]
 }
 
 model LinkCode {
@@ -116,4 +117,19 @@ model Budget {
   @@unique([userId, categoryId, month, year])
   @@index([userId])
   @@index([categoryId])
+}
+
+model MonthlyInsightCache {
+  id       String   @id @default(cuid())
+  userId   String
+  month    Int
+  year     Int
+  data     Json
+  cachedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, year])
+  @@index([userId])
+  @@index([cachedAt])
 }

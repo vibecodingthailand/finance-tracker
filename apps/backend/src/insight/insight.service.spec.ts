@@ -4,6 +4,7 @@ import { TransactionType } from "@finance-tracker/shared";
 import type { User } from "@finance-tracker/database";
 import type { AuthRepository } from "../auth/auth.repository";
 import type { TransactionsRepository } from "../transactions/transactions.repository";
+import type { InsightRepository } from "./insight.repository";
 
 const mockCreate = jest.fn();
 class MockAPIError extends Error {
@@ -107,6 +108,7 @@ function makeService(): {
   users: jest.Mocked<
     Pick<AuthRepository, "findById" | "findAllWithLineUserId">
   >;
+  cache: jest.Mocked<Pick<InsightRepository, "findFresh" | "upsert">>;
 } {
   const config = {
     getOrThrow: jest.fn().mockReturnValue("fake-key"),
@@ -120,12 +122,17 @@ function makeService(): {
   } as unknown as jest.Mocked<
     Pick<AuthRepository, "findById" | "findAllWithLineUserId">
   >;
+  const cache = {
+    findFresh: jest.fn().mockResolvedValue(null),
+    upsert: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<Pick<InsightRepository, "findFresh" | "upsert">>;
   const service = new InsightService(
     config,
     transactions as unknown as TransactionsRepository,
     users as unknown as AuthRepository,
+    cache as unknown as InsightRepository,
   );
-  return { service, transactions, users };
+  return { service, transactions, users, cache };
 }
 
 function makeUser(partial: Partial<User> = {}): User {
@@ -909,6 +916,124 @@ describe("InsightService", () => {
       const logged = String(warnSpy.mock.calls[0][0]);
       expect(logged).not.toContain("sk-ant-api03-xxx-secret-hint");
       expect(logged).toContain("Error");
+    });
+  });
+
+  describe("daily cache", () => {
+    beforeEach(() => {
+      jest.useFakeTimers({ doNotFake: ["setImmediate", "nextTick"] });
+      jest.setSystemTime(new Date(2026, 3, 22, 14, 30, 0));
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("returns cached data and skips Claude + DB when a same-day cache exists", async () => {
+      const { service, transactions, cache } = makeService();
+      const cachedPayload = {
+        month: 4,
+        year: 2026,
+        totalIncome: 30000,
+        totalExpense: 4000,
+        balance: 26000,
+        savingsRate: 86.67,
+        byCategoryIncome: [],
+        byCategoryExpense: [],
+        anomalies: [],
+        summary: "cached summary from earlier today",
+      };
+      cache.findFresh.mockResolvedValueOnce({
+        id: "cache-1",
+        userId: "user-1",
+        month: 4,
+        year: 2026,
+        data: cachedPayload,
+        cachedAt: new Date(2026, 3, 22, 9, 0, 0),
+      } as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result).toEqual(cachedPayload);
+      expect(transactions.findInRange).not.toHaveBeenCalled();
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(cache.upsert).not.toHaveBeenCalled();
+      expect(cache.findFresh).toHaveBeenCalledWith(
+        "user-1",
+        4,
+        2026,
+        new Date(2026, 3, 22, 0, 0, 0, 0),
+      );
+    });
+
+    it("computes and upserts a fresh cache entry when no fresh cache exists", async () => {
+      const { service, transactions, cache } = makeService();
+      cache.findFresh.mockResolvedValueOnce(null);
+      const food = makeCategory({ id: "cat-food", name: "อาหาร", icon: "u" });
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 2000, category: food }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      expect(cache.upsert).toHaveBeenCalledTimes(1);
+      const upsertArg = cache.upsert.mock.calls[0][0] as {
+        userId: string;
+        month: number;
+        year: number;
+        data: { summary: string; totalExpense: number };
+      };
+      expect(upsertArg.userId).toBe("user-1");
+      expect(upsertArg.month).toBe(4);
+      expect(upsertArg.year).toBe(2026);
+      expect(upsertArg.data.totalExpense).toBe(2000);
+      expect(upsertArg.data.summary).toBe(result.summary);
+    });
+
+    it("uses startOfToday as freshSince (stale yesterday's cache is ignored by repo)", async () => {
+      const { service, transactions, cache } = makeService();
+      cache.findFresh.mockResolvedValueOnce(null);
+      transactions.findInRange.mockResolvedValue([]);
+
+      await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(cache.findFresh).toHaveBeenCalledWith(
+        "user-1",
+        4,
+        2026,
+        new Date(2026, 3, 22, 0, 0, 0, 0),
+      );
+    });
+
+    it("still returns result when cache upsert fails and logs a warning", async () => {
+      const { service, transactions, cache } = makeService();
+      cache.findFresh.mockResolvedValueOnce(null);
+      cache.upsert.mockRejectedValueOnce(new Error("db down"));
+      transactions.findInRange.mockResolvedValue([]);
+
+      const warnSpy = jest
+        .spyOn(
+          (service as unknown as { logger: { warn: (...a: unknown[]) => void } })
+            .logger,
+          "warn",
+        )
+        .mockImplementation(() => undefined);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.month).toBe(4);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Insight cache upsert failed"),
+      );
+    });
+
+    it("rejects invalid period BEFORE consulting the cache", async () => {
+      const { service, cache } = makeService();
+      await expect(
+        service.getMonthlyData("user-1", 0, 2026),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(cache.findFresh).not.toHaveBeenCalled();
     });
   });
 });

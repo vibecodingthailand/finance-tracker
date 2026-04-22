@@ -15,6 +15,7 @@ import {
   TransactionWithCategory,
   TransactionsRepository,
 } from "../transactions/transactions.repository";
+import { InsightRepository } from "./insight.repository";
 
 const ANOMALY_THRESHOLD_PERCENTAGE = 30;
 const SUMMARY_MODEL = "claude-haiku-4-5";
@@ -51,6 +52,7 @@ export class InsightService {
     config: ConfigService,
     private readonly transactions: TransactionsRepository,
     private readonly users: AuthRepository,
+    private readonly cache: InsightRepository,
   ) {
     const apiKey = config.getOrThrow<string>("ANTHROPIC_API_KEY");
     this.client = new Anthropic({ apiKey });
@@ -68,6 +70,12 @@ export class InsightService {
     year: number,
   ): Promise<MonthlyInsightData> {
     this.validatePeriod(month, year);
+
+    const todayStart = startOfToday();
+    const cached = await this.cache.findFresh(userId, month, year, todayStart);
+    if (cached) {
+      return cached.data as unknown as MonthlyInsightData;
+    }
 
     const current = monthRange(year, month);
     const previous = previousMonthRange(year, month);
@@ -99,7 +107,22 @@ export class InsightService {
     };
 
     const summary = await this.buildSummary(data);
-    return { ...data, summary };
+    const result: MonthlyInsightData = { ...data, summary };
+
+    try {
+      await this.cache.upsert({
+        userId,
+        month,
+        year,
+        data: result as unknown as Prisma.InputJsonValue,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Insight cache upsert failed: ${err instanceof Error ? err.name : "unknown"}`,
+      );
+    }
+
+    return result;
   }
 
   private async buildSummary(data: AggregatedInsight): Promise<string> {
@@ -477,4 +500,9 @@ function previousMonthOf(date: Date): { month: number; year: number } {
     return { month: 12, year: date.getFullYear() - 1 };
   }
   return { month: m, year: date.getFullYear() };
+}
+
+function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 }
