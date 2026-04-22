@@ -12,6 +12,7 @@ import { RecurringModule } from "./recurring/recurring.module";
 import { BudgetModule } from "./budget/budget.module";
 import { LineModule } from "./line/line.module";
 import { LinkModule } from "./link/link.module";
+import { InsightModule } from "./insight/insight.module";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { LinkModule } from "./link/link.module";
     BudgetModule,
     LineModule,
     LinkModule,
+    InsightModule,
   ],
   controllers: [AppController],
   providers: [AppService],

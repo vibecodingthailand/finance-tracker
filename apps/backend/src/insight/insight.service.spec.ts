@@ -1,0 +1,308 @@
+import { BadRequestException } from "@nestjs/common";
+import { Test } from "@nestjs/testing";
+import { TransactionType } from "@finance-tracker/shared";
+import { TransactionsRepository } from "../transactions/transactions.repository";
+import { InsightService } from "./insight.service";
+
+type CategoryRow = {
+  id: string;
+  name: string;
+  icon: string;
+  type: TransactionType;
+  userId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type TransactionRow = {
+  id: string;
+  amount: number;
+  type: TransactionType;
+  description: string | null;
+  source: "MANUAL" | "RECURRING";
+  userId: string;
+  categoryId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  category: CategoryRow;
+};
+
+function makeCategory(overrides: Partial<CategoryRow> = {}): CategoryRow {
+  return {
+    id: "cat-food",
+    name: "อาหาร",
+    icon: "utensils",
+    type: TransactionType.EXPENSE,
+    userId: "user-1",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function makeTransaction(
+  overrides: Partial<TransactionRow> = {},
+): TransactionRow {
+  const category = overrides.category ?? makeCategory();
+  return {
+    id: "tx-1",
+    amount: 100,
+    type: category.type,
+    description: null,
+    source: "MANUAL",
+    userId: "user-1",
+    categoryId: category.id,
+    createdAt: new Date(2026, 3, 5, 10),
+    updatedAt: new Date(2026, 3, 5, 10),
+    ...overrides,
+    category,
+  };
+}
+
+describe("InsightService", () => {
+  let service: InsightService;
+  let transactions: jest.Mocked<TransactionsRepository>;
+
+  beforeEach(async () => {
+    const transactionsMock = {
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      list: jest.fn(),
+      findInRange: jest.fn(),
+      findLatestForUser: jest.fn(),
+      findForExport: jest.fn(),
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        InsightService,
+        { provide: TransactionsRepository, useValue: transactionsMock },
+      ],
+    }).compile();
+
+    service = moduleRef.get(InsightService);
+    transactions = moduleRef.get(TransactionsRepository);
+  });
+
+  describe("getMonthlyData", () => {
+    it("queries current month and previous month ranges", async () => {
+      transactions.findInRange.mockResolvedValue([]);
+
+      await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(transactions.findInRange).toHaveBeenNthCalledWith(
+        1,
+        "user-1",
+        new Date(2026, 3, 1, 0, 0, 0, 0),
+        new Date(2026, 4, 1, 0, 0, 0, 0),
+      );
+      expect(transactions.findInRange).toHaveBeenNthCalledWith(
+        2,
+        "user-1",
+        new Date(2026, 2, 1, 0, 0, 0, 0),
+        new Date(2026, 3, 1, 0, 0, 0, 0),
+      );
+    });
+
+    it("wraps to previous year when month is January", async () => {
+      transactions.findInRange.mockResolvedValue([]);
+
+      await service.getMonthlyData("user-1", 1, 2026);
+
+      expect(transactions.findInRange).toHaveBeenNthCalledWith(
+        2,
+        "user-1",
+        new Date(2025, 11, 1, 0, 0, 0, 0),
+        new Date(2026, 0, 1, 0, 0, 0, 0),
+      );
+    });
+
+    it("aggregates totals, balance, savings rate and category breakdown", async () => {
+      const food = makeCategory({ id: "cat-food", name: "อาหาร", icon: "u" });
+      const travel = makeCategory({
+        id: "cat-travel",
+        name: "เดินทาง",
+        icon: "car",
+      });
+      const salary = makeCategory({
+        id: "cat-salary",
+        name: "เงินเดือน",
+        icon: "wallet",
+        type: TransactionType.INCOME,
+      });
+
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ id: "t1", amount: 30000, category: salary }),
+        makeTransaction({ id: "t2", amount: 1500, category: food }),
+        makeTransaction({ id: "t3", amount: 500, category: food }),
+        makeTransaction({ id: "t4", amount: 2000, category: travel }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.month).toBe(4);
+      expect(result.year).toBe(2026);
+      expect(result.totalIncome).toBe(30000);
+      expect(result.totalExpense).toBe(4000);
+      expect(result.balance).toBe(26000);
+      expect(result.savingsRate).toBeCloseTo(86.67, 2);
+      expect(result.byCategoryIncome).toEqual([
+        {
+          categoryId: "cat-salary",
+          name: "เงินเดือน",
+          icon: "wallet",
+          total: 30000,
+          count: 1,
+          percentage: 100,
+        },
+      ]);
+      expect(result.byCategoryExpense).toEqual([
+        {
+          categoryId: "cat-food",
+          name: "อาหาร",
+          icon: "u",
+          total: 2000,
+          count: 2,
+          percentage: 50,
+        },
+        {
+          categoryId: "cat-travel",
+          name: "เดินทาง",
+          icon: "car",
+          total: 2000,
+          count: 1,
+          percentage: 50,
+        },
+      ]);
+    });
+
+    it("returns zero savings rate when no income", async () => {
+      const food = makeCategory();
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 500, category: food }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+      expect(result.totalIncome).toBe(0);
+      expect(result.savingsRate).toBe(0);
+      expect(result.balance).toBe(-500);
+    });
+
+    it("flags category with >30% increase as anomaly", async () => {
+      const food = makeCategory({ id: "cat-food", name: "อาหาร", icon: "u" });
+
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ id: "t1", amount: 1500, category: food }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ id: "t0", amount: 1000, category: food }),
+      ] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.anomalies).toEqual([
+        {
+          categoryId: "cat-food",
+          name: "อาหาร",
+          icon: "u",
+          type: TransactionType.EXPENSE,
+          previousTotal: 1000,
+          currentTotal: 1500,
+          changePercentage: 50,
+        },
+      ]);
+    });
+
+    it("does not flag category with <=30% change", async () => {
+      const food = makeCategory();
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 1300, category: food }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 1000, category: food }),
+      ] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+      expect(result.anomalies).toEqual([]);
+    });
+
+    it("flags brand-new category (previous total 0) as anomaly", async () => {
+      const travel = makeCategory({ id: "cat-travel", name: "เดินทาง" });
+
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 500, category: travel }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.anomalies).toHaveLength(1);
+      expect(result.anomalies[0]).toMatchObject({
+        categoryId: "cat-travel",
+        previousTotal: 0,
+        currentTotal: 500,
+        changePercentage: 100,
+      });
+    });
+
+    it("flags disappearing category (current total 0) as anomaly", async () => {
+      const travel = makeCategory({ id: "cat-travel", name: "เดินทาง" });
+
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ amount: 800, category: travel }),
+      ] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.anomalies).toHaveLength(1);
+      expect(result.anomalies[0]).toMatchObject({
+        categoryId: "cat-travel",
+        previousTotal: 800,
+        currentTotal: 0,
+        changePercentage: -100,
+      });
+    });
+
+    it("sorts anomalies by absolute change desc", async () => {
+      const food = makeCategory({ id: "cat-food", name: "อาหาร" });
+      const travel = makeCategory({ id: "cat-travel", name: "เดินทาง" });
+
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ id: "c1", amount: 1500, category: food }),
+        makeTransaction({ id: "c2", amount: 3000, category: travel }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({ id: "p1", amount: 1000, category: food }),
+        makeTransaction({ id: "p2", amount: 1000, category: travel }),
+      ] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(result.anomalies.map((a) => a.categoryId)).toEqual([
+        "cat-travel",
+        "cat-food",
+      ]);
+    });
+
+    it("rejects invalid month with 400", async () => {
+      await expect(
+        service.getMonthlyData("user-1", 0, 2026),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.getMonthlyData("user-1", 13, 2026),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(transactions.findInRange).not.toHaveBeenCalled();
+    });
+
+    it("rejects invalid year with 400", async () => {
+      await expect(
+        service.getMonthlyData("user-1", 4, 1999),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+});
