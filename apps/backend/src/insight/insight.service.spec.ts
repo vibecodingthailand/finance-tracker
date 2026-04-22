@@ -34,7 +34,11 @@ jest.mock("@line/bot-sdk", () => ({
   },
 }));
 
-import { InsightService } from "./insight.service";
+import {
+  InsightService,
+  formatInsightForLine,
+  truncateForLine,
+} from "./insight.service";
 
 type CategoryRow = {
   id: string;
@@ -696,6 +700,188 @@ describe("InsightService", () => {
 
       releaseFirstFind([]);
       await first;
+    });
+  });
+
+  describe("Prisma.Decimal amount handling", () => {
+    it("unwraps Decimal-like amount via toNumber()", async () => {
+      const { service, transactions } = makeService();
+      const food = makeCategory({ id: "cat-food", name: "อาหาร" });
+      const decimalLike = {
+        toNumber: jest.fn().mockReturnValue(1234.56),
+      };
+      transactions.findInRange.mockResolvedValueOnce([
+        makeTransaction({
+          amount: decimalLike as unknown as number,
+          category: food,
+        }),
+      ] as never);
+      transactions.findInRange.mockResolvedValueOnce([] as never);
+
+      const result = await service.getMonthlyData("user-1", 4, 2026);
+
+      expect(decimalLike.toNumber).toHaveBeenCalled();
+      expect(result.totalExpense).toBe(1234.56);
+      expect(result.byCategoryExpense[0].total).toBe(1234.56);
+    });
+  });
+
+  describe("AI prompt category limit", () => {
+    it("includes at most top 5 expense categories in Claude user prompt", async () => {
+      const { service, transactions } = makeService();
+      const categories = Array.from({ length: 7 }, (_, i) =>
+        makeCategory({
+          id: `cat-${i}`,
+          name: `หมวด-${i}`,
+          icon: `icon-${i}`,
+        }),
+      );
+      const currentRows = categories.map((cat, i) =>
+        makeTransaction({
+          id: `tx-${i}`,
+          amount: (7 - i) * 1000,
+          category: cat,
+        }),
+      );
+      const previousRows = categories.map((cat, i) =>
+        makeTransaction({
+          id: `prev-${i}`,
+          amount: (7 - i) * 1000,
+          category: cat,
+        }),
+      );
+      transactions.findInRange.mockResolvedValueOnce(currentRows as never);
+      transactions.findInRange.mockResolvedValueOnce(previousRows as never);
+
+      await service.getMonthlyData("user-1", 4, 2026);
+
+      const call = mockCreate.mock.calls[0][0] as {
+        messages: { role: string; content: string }[];
+      };
+      const userPrompt = call.messages[0].content;
+      const topBlock = userPrompt
+        .split("หมวดรายจ่ายสูงสุด:")[1]
+        ?.split("\n\n")[0] ?? "";
+
+      expect(topBlock).toContain("หมวด-0");
+      expect(topBlock).toContain("หมวด-1");
+      expect(topBlock).toContain("หมวด-2");
+      expect(topBlock).toContain("หมวด-3");
+      expect(topBlock).toContain("หมวด-4");
+      expect(topBlock).not.toContain("หมวด-5");
+      expect(topBlock).not.toContain("หมวด-6");
+      expect(topBlock.split("\n").filter((l) => l.startsWith("- "))).toHaveLength(5);
+    });
+  });
+
+  describe("runMonthlyBroadcast – concurrency safety", () => {
+    beforeEach(() => {
+      jest.useFakeTimers({ doNotFake: ["setImmediate", "nextTick"] });
+      jest.setSystemTime(new Date(2026, 3, 1, 9, 0, 0));
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("releases isBroadcasting lock when findAllWithLineUserId throws", async () => {
+      const { service, users } = makeService();
+      users.findAllWithLineUserId.mockRejectedValueOnce(
+        new Error("db exploded"),
+      );
+      jest
+        .spyOn(
+          (service as unknown as { logger: { warn: (...a: unknown[]) => void } })
+            .logger,
+          "warn",
+        )
+        .mockImplementation(() => undefined);
+
+      await expect(service.runMonthlyBroadcast()).rejects.toThrow(
+        "db exploded",
+      );
+
+      users.findAllWithLineUserId.mockResolvedValueOnce([]);
+      await expect(service.runMonthlyBroadcast()).resolves.toBeUndefined();
+      expect(users.findAllWithLineUserId).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("truncateForLine (exported helper)", () => {
+    it("returns text unchanged when length is under the limit", () => {
+      const text = "ก".repeat(4999);
+      expect(truncateForLine(text)).toBe(text);
+    });
+
+    it("returns text unchanged when length is exactly the limit", () => {
+      const text = "x".repeat(5000);
+      expect(truncateForLine(text)).toBe(text);
+      expect(truncateForLine(text).length).toBe(5000);
+    });
+
+    it("truncates to exactly 5000 chars ending with ellipsis when over limit", () => {
+      const text = "a".repeat(5001);
+      const out = truncateForLine(text);
+      expect(out.length).toBe(5000);
+      expect(out.endsWith("…")).toBe(true);
+      expect(out.slice(0, 4999)).toBe("a".repeat(4999));
+    });
+  });
+
+  describe("formatInsightForLine (exported helper)", () => {
+    it("omits หมวดรายจ่ายสูงสุด block when there are no expense categories", () => {
+      const text = formatInsightForLine({
+        month: 4,
+        year: 2026,
+        totalIncome: 10000,
+        totalExpense: 0,
+        balance: 10000,
+        savingsRate: 100,
+        byCategoryIncome: [],
+        byCategoryExpense: [],
+        anomalies: [],
+        summary: "สรุป",
+      });
+
+      expect(text).not.toContain("หมวดรายจ่ายสูงสุด");
+      expect(text).toContain("รายรับ: ฿10,000.00");
+      expect(text).toContain("อัตราการออม: 100%");
+      expect(text).toContain("สรุป");
+    });
+
+    it("renders top expense categories with bullet, name, amount and percentage", () => {
+      const text = formatInsightForLine({
+        month: 4,
+        year: 2026,
+        totalIncome: 0,
+        totalExpense: 3000,
+        balance: -3000,
+        savingsRate: 0,
+        byCategoryIncome: [],
+        byCategoryExpense: [
+          {
+            categoryId: "cat-food",
+            name: "อาหาร",
+            icon: "u",
+            total: 2000,
+            count: 4,
+            percentage: 66.67,
+          },
+          {
+            categoryId: "cat-travel",
+            name: "เดินทาง",
+            icon: "c",
+            total: 1000,
+            count: 2,
+            percentage: 33.33,
+          },
+        ],
+        anomalies: [],
+        summary: "",
+      });
+
+      expect(text).toContain("หมวดรายจ่ายสูงสุด:");
+      expect(text).toContain("• อาหาร ฿2,000.00 (66.67%)");
+      expect(text).toContain("• เดินทาง ฿1,000.00 (33.33%)");
     });
   });
 
