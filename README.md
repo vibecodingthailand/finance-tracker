@@ -38,6 +38,24 @@ Personal finance tracker ฉบับคนไทย ใช้ monorepo stack **
 
 ## ตัวอย่างหน้าจอ (Screenshots)
 
+### บันทึกผ่าน LINE Bot — พิมพ์สั้น ๆ Claude จัดหมวดให้อัตโนมัติ
+
+<table>
+  <tr>
+    <td width="45%"><img src="./docs/screenshots/line-bot-demo.png" alt="LINE bot conversation — user ส่งข้อความภาษาไทย กาแฟ 65, ค่าแทกซี่ 120, เงินเดือน 45000 bot ตอบพร้อมหมวดอัตโนมัติ"/></td>
+    <td width="55%" valign="middle">
+      <ul>
+        <li><code>"กาแฟ 65"</code> → <i>บันทึกแล้ว: กาแฟ 65.00 บาท <b>(อาหาร)</b></i></li>
+        <li><code>"ค่าแทกซี่ 120"</code> → <i>บันทึกแล้ว: ค่าแทกซี่ 120.00 บาท <b>(เดินทาง)</b></i></li>
+        <li><code>"เงินเดือน 45000"</code> → <i>บันทึกรายรับแล้ว: 45,000.00 บาท <b>(เงินเดือน)</b></i></li>
+      </ul>
+      <p>Thai parser แยกชื่อรายการ + จำนวนเงิน, <b>Claude Haiku</b> เลือกหมวดที่เข้ากับข้อความ, แยก income vs. expense จาก keyword อัตโนมัติ ไม่ต้องเปิด app บันทึกเอง</p>
+    </td>
+  </tr>
+</table>
+
+### หน้าเว็บ (Web Dashboard)
+
 <table>
   <tr>
     <td width="33%" align="center"><b>แดชบอร์ด</b><br/><sub>สรุปเงินรายเดือน + charts</sub></td>
