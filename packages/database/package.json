@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
+    "db:seed": "prisma db seed",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "@types/node": "^22.0.0",
     "dotenv": "^16.4.0",
     "prisma": "^7.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
 }

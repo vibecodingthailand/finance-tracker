@@ -10,6 +10,7 @@
     "typecheck": "pnpm -r typecheck",
     "prisma:generate": "pnpm --filter @finance-tracker/database prisma:generate",
     "prisma:migrate": "pnpm --filter @finance-tracker/database prisma:migrate",
-    "prisma:studio": "pnpm --filter @finance-tracker/database prisma:studio"
+    "prisma:studio": "pnpm --filter @finance-tracker/database prisma:studio",
+    "db:seed": "pnpm --filter @finance-tracker/database db:seed"
   }
 }
