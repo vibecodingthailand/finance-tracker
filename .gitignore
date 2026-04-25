@@ -20,5 +20,7 @@ pnpm-debug.log*
 .vite/
 .next/
 
+*.tsbuildinfo
+
 .prisma/
 **/generated/prisma/
