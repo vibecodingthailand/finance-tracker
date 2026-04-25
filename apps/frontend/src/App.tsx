@@ -1,16 +1,28 @@
 import { Navigate, Route, Routes } from 'react-router';
+import { ProtectedRoute } from './contexts/AuthContext';
 import { RootLayout } from './layouts/RootLayout';
 import { Dashboard } from './pages/Dashboard';
+import { Login } from './pages/Login';
+import { Register } from './pages/Register';
 import { Transactions } from './pages/Transactions';
 
 export function App() {
   return (
     <Routes>
-      <Route element={<RootLayout />}>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route
+        element={
+          <ProtectedRoute>
+            <RootLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="transactions" element={<Transactions />} />
       </Route>
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }

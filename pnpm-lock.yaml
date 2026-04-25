@@ -98,6 +98,12 @@ importers:
       '@finance-tracker/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      class-transformer:
+        specifier: ^0.5.1
+        version: 0.5.1
+      class-validator:
+        specifier: ^0.15.1
+        version: 0.15.1
       react:
         specifier: ^19.0.0
         version: 19.2.5
@@ -107,6 +113,9 @@ importers:
       react-router:
         specifier: ^7.0.0
         version: 7.14.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
