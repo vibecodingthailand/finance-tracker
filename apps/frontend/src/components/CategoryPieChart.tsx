@@ -65,15 +65,13 @@ export function CategoryPieChart({ title, data, palette, className = '' }: Categ
                   data={data}
                   dataKey="total"
                   nameKey="name"
-                  innerRadius="55%"
-                  outerRadius="85%"
-                  paddingAngle={1}
+                  innerRadius="58%"
+                  outerRadius="90%"
+                  paddingAngle={data.length > 1 ? 2 : 0}
                   stroke="#09090b"
                   strokeWidth={2}
                   isAnimationActive={false}
-                  label={(entry: { percentage: number }) =>
-                    entry.percentage >= 5 ? `${entry.percentage}%` : ''
-                  }
+                  label={false}
                   labelLine={false}
                 >
                   {data.map((item, idx) => (
