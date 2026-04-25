@@ -1,11 +1,15 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@finance-tracker/database';
+import { PrismaClient, createAdapter } from '@finance-tracker/database';
 
 @Injectable()
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  constructor() {
+    super({ adapter: createAdapter() });
+  }
+
   async onModuleInit() {
     await this.$connect();
   }

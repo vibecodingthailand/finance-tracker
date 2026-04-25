@@ -1,6 +1,14 @@
-import { PrismaClient, TransactionType } from '@prisma/client';
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
 
-const prisma = new PrismaClient();
+config({ path: resolve(__dirname, '../../../.env') });
+
+import { PrismaClient, TransactionType } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+});
 
 const expenseCategories: Array<{ name: string; icon: string }> = [
   { name: 'อาหาร', icon: '🍚' },
@@ -18,24 +26,24 @@ const incomeCategories: Array<{ name: string; icon: string }> = [
   { name: 'รายได้อื่นๆ', icon: '💵' },
 ];
 
+// Encodes (type, name) into a stable id so upsert can key on a single
+// unique column. Postgres treats NULL as distinct in unique constraints,
+// so a composite (name, type, userId) cannot guarantee idempotency for
+// global rows where userId is null.
+const defaultCategoryId = (type: TransactionType, name: string) =>
+  `default:${type}:${name}`;
+
 async function upsertDefaultCategory(
   name: string,
   icon: string,
   type: TransactionType,
 ) {
-  const existing = await prisma.category.findFirst({
-    where: { name, type, userId: null },
+  const id = defaultCategoryId(type, name);
+  await prisma.category.upsert({
+    where: { id },
+    create: { id, name, icon, type, userId: null },
+    update: { icon, name },
   });
-  if (existing) {
-    await prisma.category.update({
-      where: { id: existing.id },
-      data: { icon },
-    });
-  } else {
-    await prisma.category.create({
-      data: { name, icon, type, userId: null },
-    });
-  }
 }
 
 async function main() {
