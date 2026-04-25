@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { XIcon } from '../icons';
 
 interface ModalProps {
   open: boolean;
@@ -46,18 +47,7 @@ export function Modal({ open, onClose, title, children, footer, closeOnBackdrop 
             className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
             onClick={onClose}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="h-5 w-5"
-            >
-              <path
-                fillRule="evenodd"
-                d="M4.28 4.22a.75.75 0 0 1 1.06 0L10 8.94l4.66-4.72a.75.75 0 1 1 1.07 1.05L11.06 10l4.67 4.72a.75.75 0 1 1-1.07 1.06L10 11.06l-4.66 4.72a.75.75 0 1 1-1.07-1.06L8.94 10 4.28 5.27a.75.75 0 0 1 0-1.05Z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <XIcon className="h-5 w-5" />
           </button>
         </header>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>

@@ -11,6 +11,7 @@ import { Pagination } from '../components/Pagination';
 import { TransactionFilters, type TransactionFiltersValue } from '../components/TransactionFilters';
 import { TransactionFormModal } from '../components/TransactionFormModal';
 import { TransactionsTable } from '../components/TransactionsTable';
+import { PlusIcon } from '../components/icons';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ApiError, apiFetch } from '../lib/api';
@@ -147,7 +148,8 @@ export function Transactions() {
           <h1 className="font-heading text-2xl font-bold text-zinc-100 sm:text-3xl">รายการ</h1>
           <p className="text-sm text-zinc-400">จัดการรายรับรายจ่ายทั้งหมดของคุณ</p>
         </div>
-        <Button onClick={() => setModal('create')} className="sm:min-w-40">
+        <Button onClick={() => setModal('create')} className="gap-2 sm:min-w-40">
+          <PlusIcon className="h-4 w-4" />
           เพิ่มรายการ
         </Button>
       </header>
@@ -177,7 +179,10 @@ export function Transactions() {
           title="ยังไม่มีรายการ"
           description="ลองล้างตัวกรองหรือเพิ่มรายการใหม่"
         >
-          <Button onClick={() => setModal('create')}>เพิ่มรายการ</Button>
+          <Button onClick={() => setModal('create')} className="gap-2">
+            <PlusIcon className="h-4 w-4" />
+            เพิ่มรายการ
+          </Button>
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-4">

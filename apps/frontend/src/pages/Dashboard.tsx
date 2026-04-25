@@ -9,6 +9,7 @@ import { DailyBarChart } from '../components/DailyBarChart';
 import { MonthPicker } from '../components/MonthPicker';
 import { RecentTransactionsCard } from '../components/RecentTransactionsCard';
 import { SummaryCard } from '../components/SummaryCard';
+import { TrendingDownIcon, TrendingUpIcon, WalletIcon } from '../components/icons';
 import { Card } from '../components/ui/Card';
 import { ApiError, apiFetch } from '../lib/api';
 import { THAI_MONTH_NAMES } from '../lib/format';
@@ -128,9 +129,24 @@ function SummarySection({ summary, loading, error }: SummarySectionProps) {
   }
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      <SummaryCard label="รายรับรวม" amount={summary.totalIncome} tone="income" />
-      <SummaryCard label="รายจ่ายรวม" amount={summary.totalExpense} tone="expense" />
-      <SummaryCard label="คงเหลือ" amount={summary.balance} tone="balance" />
+      <SummaryCard
+        label="รายรับรวม"
+        amount={summary.totalIncome}
+        tone="income"
+        icon={<TrendingUpIcon className="h-6 w-6" />}
+      />
+      <SummaryCard
+        label="รายจ่ายรวม"
+        amount={summary.totalExpense}
+        tone="expense"
+        icon={<TrendingDownIcon className="h-6 w-6" />}
+      />
+      <SummaryCard
+        label="คงเหลือ"
+        amount={summary.balance}
+        tone="balance"
+        icon={<WalletIcon className="h-6 w-6" />}
+      />
     </div>
   );
 }

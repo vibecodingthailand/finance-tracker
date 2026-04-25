@@ -131,12 +131,13 @@ export function TransactionFormModal({
           label="หมวดหมู่"
           name="categoryId"
           value={values.categoryId}
-          onChange={(event) => setValues((prev) => ({ ...prev, categoryId: event.target.value }))}
+          onChange={(next) => setValues((prev) => ({ ...prev, categoryId: next }))}
           options={filteredCategories.map((category) => ({
             value: category.id,
-            label: `${category.icon} ${category.name}`,
+            label: category.name,
+            icon: category.icon,
           }))}
-          placeholder={filteredCategories.length === 0 ? 'ยังไม่มีหมวดหมู่' : undefined}
+          placeholder={filteredCategories.length === 0 ? 'ยังไม่มีหมวดหมู่' : 'เลือกหมวดหมู่'}
           disabled={filteredCategories.length === 0}
           error={fieldErrors.categoryId}
         />

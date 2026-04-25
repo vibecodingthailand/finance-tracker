@@ -9,6 +9,7 @@ import {
 } from '../components/CategoryFormModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
+import { PlusIcon } from '../components/icons';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ApiError, apiFetch } from '../lib/api';
@@ -120,8 +121,9 @@ export function Categories() {
         </div>
         <Button
           onClick={() => setModal({ kind: 'create', type: TransactionType.EXPENSE })}
-          className="sm:min-w-40"
+          className="gap-2 sm:min-w-40"
         >
+          <PlusIcon className="h-4 w-4" />
           เพิ่มหมวดใหม่
         </Button>
       </header>
@@ -209,7 +211,10 @@ function CategorySection({
       </header>
       {categories.length === 0 ? (
         <EmptyState title="ยังไม่มีหมวดหมู่" description="เพิ่มหมวดหมู่ใหม่เพื่อเริ่มต้น">
-          <Button onClick={onAdd}>เพิ่มหมวดใหม่</Button>
+          <Button onClick={onAdd} className="gap-2">
+            <PlusIcon className="h-4 w-4" />
+            เพิ่มหมวดใหม่
+          </Button>
         </EmptyState>
       ) : (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

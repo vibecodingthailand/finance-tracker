@@ -1,6 +1,7 @@
 import type { CategoryResponse } from '@finance-tracker/shared';
 import { TransactionType } from '@finance-tracker/shared';
-import { Select } from './ui/Select';
+import { DateField } from './ui/DateField';
+import { Select, type SelectOption } from './ui/Select';
 
 export interface TransactionFiltersValue {
   categoryId: string;
@@ -16,9 +17,6 @@ interface TransactionFiltersProps {
   onReset: () => void;
 }
 
-const dateInputClass =
-  'min-h-[44px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none transition focus:ring-2 focus:ring-emerald-500/50 hover:border-zinc-700';
-
 export function TransactionFilters({
   value,
   categories,
@@ -31,37 +29,43 @@ export function TransactionFilters({
     value.startDate !== '' ||
     value.endDate !== '';
 
-  const categoryOptions = categories
-    .filter((category) => value.type === '' || category.type === value.type)
-    .map((category) => ({
-      value: category.id,
-      label: `${category.icon} ${category.name}`,
-    }));
+  const categoryOptions: SelectOption[] = [
+    { value: '', label: 'ทั้งหมด' },
+    ...categories
+      .filter((category) => value.type === '' || category.type === value.type)
+      .map((category) => ({
+        value: category.id,
+        label: category.name,
+        icon: category.icon,
+      })),
+  ];
+
+  const typeOptions: SelectOption[] = [
+    { value: '', label: 'ทั้งหมด' },
+    { value: TransactionType.INCOME, label: 'รายรับ', icon: <TypeDot tone="income" /> },
+    { value: TransactionType.EXPENSE, label: 'รายจ่าย', icon: <TypeDot tone="expense" /> },
+  ];
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Select
         label="ประเภท"
         value={value.type}
-        onChange={(event) =>
+        options={typeOptions}
+        onChange={(next) =>
           onChange({
             ...value,
-            type: event.target.value as TransactionFiltersValue['type'],
+            type: next as TransactionFiltersValue['type'],
             categoryId: '',
           })
         }
-        options={[
-          { value: '', label: 'ทั้งหมด' },
-          { value: TransactionType.INCOME, label: 'รายรับ' },
-          { value: TransactionType.EXPENSE, label: 'รายจ่าย' },
-        ]}
       />
 
       <Select
         label="หมวดหมู่"
         value={value.categoryId}
-        onChange={(event) => onChange({ ...value, categoryId: event.target.value })}
-        options={[{ value: '', label: 'ทั้งหมด' }, ...categoryOptions]}
+        options={categoryOptions}
+        onChange={(next) => onChange({ ...value, categoryId: next })}
       />
 
       <DateField
@@ -70,13 +74,11 @@ export function TransactionFilters({
         onChange={(next) => onChange({ ...value, startDate: next })}
       />
 
-      <div className="flex flex-col gap-1.5">
-        <DateField
-          label="วันที่สิ้นสุด"
-          value={value.endDate}
-          onChange={(next) => onChange({ ...value, endDate: next })}
-        />
-      </div>
+      <DateField
+        label="วันที่สิ้นสุด"
+        value={value.endDate}
+        onChange={(next) => onChange({ ...value, endDate: next })}
+      />
 
       {hasActive ? (
         <button
@@ -91,22 +93,8 @@ export function TransactionFilters({
   );
 }
 
-interface DateFieldProps {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-}
-
-function DateField({ label, value, onChange }: DateFieldProps) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-zinc-300">{label}</label>
-      <input
-        type="date"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={dateInputClass}
-      />
-    </div>
-  );
+function TypeDot({ tone }: { tone: 'income' | 'expense' }) {
+  const className =
+    tone === 'income' ? 'h-2.5 w-2.5 rounded-full bg-emerald-500' : 'h-2.5 w-2.5 rounded-full bg-rose-500';
+  return <span className={className} />;
 }
