@@ -11,7 +11,7 @@ async function bootstrap() {
     origin: 'http://localhost:5173',
     credentials: true,
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 
   const config = app.get(ConfigService);
   const port = Number(config.get('PORT')) || 3000;
