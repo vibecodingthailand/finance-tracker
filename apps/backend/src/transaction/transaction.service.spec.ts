@@ -1,0 +1,189 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { TransactionType } from '@finance-tracker/shared';
+import { TransactionRepo } from './transaction.repo';
+import { TransactionService } from './transaction.service';
+
+describe('TransactionService', () => {
+  let service: TransactionService;
+  let repo: jest.Mocked<TransactionRepo>;
+
+  const userId = 'user1';
+  const makeTransaction = (overrides: Record<string, unknown> = {}) => ({
+    id: 'tx1',
+    amount: { toNumber: () => 100 },
+    type: TransactionType.EXPENSE,
+    description: null,
+    categoryId: 'cat1',
+    userId,
+    source: 'WEB',
+    createdAt: new Date('2026-04-15T10:00:00Z'),
+    updatedAt: new Date(),
+    ...overrides,
+  });
+
+  const makeCategory = (overrides: Record<string, unknown> = {}) => ({
+    id: 'cat1',
+    type: TransactionType.EXPENSE,
+    userId: null,
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        TransactionService,
+        {
+          provide: TransactionRepo,
+          useValue: {
+            findAll: jest.fn(),
+            findForSummary: jest.fn(),
+            findById: jest.fn(),
+            findCategoryForValidation: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            delete: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get(TransactionService);
+    repo = module.get(TransactionRepo);
+  });
+
+  describe('create', () => {
+    it('throws NotFoundException when category not found', async () => {
+      repo.findCategoryForValidation.mockResolvedValue(null);
+      await expect(
+        service.create(userId, { amount: 100, type: TransactionType.EXPENSE, categoryId: 'cat1' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ForbiddenException when category belongs to another user', async () => {
+      repo.findCategoryForValidation.mockResolvedValue(makeCategory({ userId: 'other' }) as never);
+      await expect(
+        service.create(userId, { amount: 100, type: TransactionType.EXPENSE, categoryId: 'cat1' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws BadRequestException when category type mismatches', async () => {
+      repo.findCategoryForValidation.mockResolvedValue(makeCategory({ type: TransactionType.INCOME }) as never);
+      await expect(
+        service.create(userId, { amount: 100, type: TransactionType.EXPENSE, categoryId: 'cat1' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('creates and returns transaction for seed category', async () => {
+      repo.findCategoryForValidation.mockResolvedValue(makeCategory() as never);
+      repo.create.mockResolvedValue(makeTransaction() as never);
+      const result = await service.create(userId, {
+        amount: 100,
+        type: TransactionType.EXPENSE,
+        categoryId: 'cat1',
+      });
+      expect(result).toMatchObject({ id: 'tx1', amount: 100, type: TransactionType.EXPENSE });
+    });
+
+    it('creates for user-owned category', async () => {
+      repo.findCategoryForValidation.mockResolvedValue(makeCategory({ userId }) as never);
+      repo.create.mockResolvedValue(makeTransaction() as never);
+      await expect(
+        service.create(userId, { amount: 50, type: TransactionType.EXPENSE, categoryId: 'cat1' }),
+      ).resolves.toMatchObject({ id: 'tx1' });
+    });
+  });
+
+  describe('findAll', () => {
+    it('returns paginated result with defaults', async () => {
+      repo.findAll.mockResolvedValue({ data: [makeTransaction() as never], total: 1, page: 1, limit: 20 });
+      const result = await service.findAll(userId, {});
+      expect(repo.findAll).toHaveBeenCalledWith(userId, expect.objectContaining({ page: 1, limit: 20 }));
+      expect(result.data).toHaveLength(1);
+      expect(result.total).toBe(1);
+    });
+  });
+
+  describe('getSummary', () => {
+    it('computes totals and daily breakdown correctly', async () => {
+      const expenseTx = makeTransaction({
+        type: TransactionType.EXPENSE,
+        amount: { toNumber: () => 200 },
+        createdAt: new Date('2026-04-10T10:00:00Z'),
+        category: { name: 'Food', icon: '🍔' },
+      });
+      const incomeTx = makeTransaction({
+        type: TransactionType.INCOME,
+        amount: { toNumber: () => 500 },
+        createdAt: new Date('2026-04-15T10:00:00Z'),
+        categoryId: 'cat2',
+        category: { name: 'Salary', icon: '💰' },
+      });
+      repo.findForSummary.mockResolvedValue([expenseTx, incomeTx] as never);
+
+      const result = await service.getSummary(userId, { month: 4, year: 2026 });
+
+      expect(result.totalIncome).toBe(500);
+      expect(result.totalExpense).toBe(200);
+      expect(result.balance).toBe(300);
+      expect(result.byCategoryExpense).toHaveLength(1);
+      expect(result.byCategoryExpense[0]).toMatchObject({ name: 'Food', total: 200, percentage: 100 });
+      expect(result.byCategoryIncome).toHaveLength(1);
+      expect(result.dailyTotals).toHaveLength(30);
+      const day10 = result.dailyTotals.find((d) => d.date === '2026-04-10');
+      expect(day10).toEqual({ date: '2026-04-10', income: 0, expense: 200 });
+    });
+  });
+
+  describe('update', () => {
+    it('throws NotFoundException when transaction not found', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.update(userId, 'tx1', { amount: 50 })).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ForbiddenException for another user transaction', async () => {
+      repo.findById.mockResolvedValue(makeTransaction({ userId: 'other' }) as never);
+      await expect(service.update(userId, 'tx1', { amount: 50 })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('validates new category when categoryId changes', async () => {
+      repo.findById.mockResolvedValue(makeTransaction() as never);
+      repo.findCategoryForValidation.mockResolvedValue(
+        makeCategory({ type: TransactionType.INCOME }) as never,
+      );
+      await expect(
+        service.update(userId, 'tx1', { categoryId: 'cat2' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('updates and returns transaction', async () => {
+      const updated = makeTransaction({ amount: { toNumber: () => 150 } });
+      repo.findById.mockResolvedValue(makeTransaction() as never);
+      repo.update.mockResolvedValue(updated as never);
+      const result = await service.update(userId, 'tx1', { amount: 150 });
+      expect(result.amount).toBe(150);
+    });
+  });
+
+  describe('delete', () => {
+    it('throws NotFoundException when transaction not found', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.delete(userId, 'tx1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ForbiddenException for another user transaction', async () => {
+      repo.findById.mockResolvedValue(makeTransaction({ userId: 'other' }) as never);
+      await expect(service.delete(userId, 'tx1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('deletes successfully', async () => {
+      repo.findById.mockResolvedValue(makeTransaction() as never);
+      repo.delete.mockResolvedValue(makeTransaction() as never);
+      await expect(service.delete(userId, 'tx1')).resolves.toBeUndefined();
+    });
+  });
+});
