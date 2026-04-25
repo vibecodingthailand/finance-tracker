@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router';
 const navItems = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/transactions', label: 'Transactions' },
+  { to: '/categories', label: 'Categories' },
 ];
 
 export function RootLayout() {

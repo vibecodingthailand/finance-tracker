@@ -5,6 +5,7 @@ import {
   type CategoryResponse,
   type TransactionResponse,
 } from '@finance-tracker/shared';
+import { TypeToggle } from './TypeToggle';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
@@ -175,45 +176,6 @@ export function TransactionFormModal({
         </div>
       </form>
     </Modal>
-  );
-}
-
-interface TypeToggleProps {
-  value: TransactionType;
-  onChange: (next: TransactionType) => void;
-}
-
-function TypeToggle({ value, onChange }: TypeToggleProps) {
-  const baseClass =
-    'flex-1 min-h-[44px] rounded-xl border text-sm font-semibold transition focus:outline-none focus:ring-2';
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-zinc-300">ประเภท</span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(TransactionType.EXPENSE)}
-          className={
-            value === TransactionType.EXPENSE
-              ? `${baseClass} border-rose-500/60 bg-rose-500/10 text-rose-300 focus:ring-rose-500/40`
-              : `${baseClass} border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700 focus:ring-zinc-500/40`
-          }
-        >
-          รายจ่าย
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(TransactionType.INCOME)}
-          className={
-            value === TransactionType.INCOME
-              ? `${baseClass} border-emerald-500/60 bg-emerald-500/10 text-emerald-300 focus:ring-emerald-500/40`
-              : `${baseClass} border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700 focus:ring-zinc-500/40`
-          }
-        >
-          รายรับ
-        </button>
-      </div>
-    </div>
   );
 }
 
