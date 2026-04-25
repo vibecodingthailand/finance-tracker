@@ -12,10 +12,17 @@
     min-height: 100%;
   }
 
+  html {
+    color-scheme: dark;
+  }
+
   body {
     font-family: var(--font-sans);
     background-color: #09090b;
     color: #f4f4f5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   h1,
@@ -23,6 +30,27 @@
   h3,
   h4 {
     font-family: var(--font-heading);
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.85);
+    opacity: 0.7;
+    cursor: pointer;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
+  input[type="date"]::-webkit-datetime-edit-text,
+  input[type="date"]::-webkit-datetime-edit-month-field,
+  input[type="date"]::-webkit-datetime-edit-day-field,
+  input[type="date"]::-webkit-datetime-edit-year-field {
+    color: #e4e4e7;
+  }
+
+  input[type="date"]:not(:focus):invalid::-webkit-datetime-edit {
+    color: #71717a;
   }
 
   @keyframes fadeIn {

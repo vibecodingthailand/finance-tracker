@@ -85,8 +85,9 @@ export function CategoryPieChart({ title, data, palette, className = '' }: Categ
                     backgroundColor: '#18181b',
                     border: '1px solid #27272a',
                     borderRadius: 12,
-                    color: '#f4f4f5',
                   }}
+                  itemStyle={{ color: '#f4f4f5' }}
+                  labelStyle={{ color: '#a1a1aa' }}
                   formatter={(value: number, _name: string, item) => {
                     const payload = item.payload as CategoryBreakdown;
                     return [`${formatCurrency(value)} (${payload.percentage}%)`, payload.name];

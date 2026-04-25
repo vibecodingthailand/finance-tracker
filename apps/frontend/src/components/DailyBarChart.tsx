@@ -72,8 +72,9 @@ export function DailyBarChart({ data, className = '' }: DailyBarChartProps) {
                   backgroundColor: '#18181b',
                   border: '1px solid #27272a',
                   borderRadius: 12,
-                  color: '#f4f4f5',
                 }}
+                itemStyle={{ color: '#f4f4f5' }}
+                labelStyle={{ color: '#a1a1aa', fontWeight: 600 }}
                 labelFormatter={(label: number) => `วันที่ ${label}`}
                 formatter={(value: number, name: string) => [formatCurrency(value), name]}
               />
