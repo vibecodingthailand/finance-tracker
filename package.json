@@ -1,0 +1,15 @@
+{
+  "name": "finance-tracker",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend start:dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "prisma:generate": "pnpm --filter @finance-tracker/database prisma:generate",
+    "prisma:migrate": "pnpm --filter @finance-tracker/database prisma:migrate",
+    "prisma:studio": "pnpm --filter @finance-tracker/database prisma:studio"
+  }
+}
