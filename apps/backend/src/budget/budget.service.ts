@@ -94,6 +94,7 @@ export class BudgetService {
       const percentage = budgetAmount > 0 ? Math.round((spentAmount / budgetAmount) * 1000) / 10 : 0;
       return {
         id: b.id,
+        categoryId: b.categoryId,
         categoryName: b.category.name,
         categoryIcon: b.category.icon,
         budgetAmount,

@@ -107,6 +107,7 @@ describe('BudgetService', () => {
       expect(result).toEqual([
         {
           id: 'b1',
+          categoryId: 'cat1',
           categoryName: 'Food',
           categoryIcon: '🍔',
           budgetAmount: 1000,

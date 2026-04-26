@@ -8,8 +8,15 @@ import { Card } from '../components/ui/Card';
 import { ApiError, apiFetch } from '../lib/api';
 import { formatCurrency, THAI_MONTH_NAMES } from '../lib/format';
 
-interface EnrichedBudgetItem extends BudgetStatusItem {
-  categoryId: string | null;
+interface BudgetRow {
+  categoryId: string;
+  categoryName: string;
+  categoryIcon: string;
+  budgetId: string | null;
+  budgetAmount: number;
+  spentAmount: number;
+  percentage: number;
+  isOverBudget: boolean;
 }
 
 type ModalState =
@@ -70,17 +77,41 @@ export function Budget() {
     };
   }, [month, year, refreshKey]);
 
-  const categoryIdByName = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const cat of categories) {
-      map.set(cat.name, cat.id);
+  const budgetByCategoryId = useMemo(() => {
+    const map = new Map<string, BudgetStatusItem>();
+    for (const item of items) {
+      map.set(item.categoryId, item);
     }
     return map;
-  }, [categories]);
+  }, [items]);
 
-  const rows = useMemo<EnrichedBudgetItem[]>(
-    () => items.map((item) => ({ ...item, categoryId: categoryIdByName.get(item.categoryName) ?? null })),
-    [items, categoryIdByName],
+  const rows = useMemo<BudgetRow[]>(
+    () =>
+      categories.map((cat) => {
+        const budget = budgetByCategoryId.get(cat.id);
+        return budget
+          ? {
+              categoryId: cat.id,
+              categoryName: cat.name,
+              categoryIcon: cat.icon,
+              budgetId: budget.id,
+              budgetAmount: budget.budgetAmount,
+              spentAmount: budget.spentAmount,
+              percentage: budget.percentage,
+              isOverBudget: budget.isOverBudget,
+            }
+          : {
+              categoryId: cat.id,
+              categoryName: cat.name,
+              categoryIcon: cat.icon,
+              budgetId: null,
+              budgetAmount: 0,
+              spentAmount: 0,
+              percentage: 0,
+              isOverBudget: false,
+            };
+      }),
+    [categories, budgetByCategoryId],
   );
 
   const handleSuccess = useCallback(() => {
@@ -115,27 +146,27 @@ export function Budget() {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-900/40 px-4 py-10 text-center">
-          <p className="font-heading text-base font-semibold text-zinc-200">ยังไม่มีข้อมูลงบประมาณ</p>
-          <p className="mt-1 text-sm text-zinc-500">เพิ่มหมวดหมู่รายจ่ายและตั้งงบประมาณเพื่อเริ่มต้น</p>
+          <p className="font-heading text-base font-semibold text-zinc-200">ยังไม่มีหมวดหมู่รายจ่าย</p>
+          <p className="mt-1 text-sm text-zinc-500">เพิ่มหมวดหมู่รายจ่ายก่อนเพื่อตั้งงบประมาณ</p>
         </div>
       ) : (
         <ul className="flex flex-col gap-3">
           {rows.map((row) => (
             <BudgetItemRow
-              key={row.categoryName}
+              key={row.categoryId}
               row={row}
-              onSet={() => {
-                if (row.categoryId !== null) {
-                  setModal({ kind: 'set', categoryId: row.categoryId, categoryName: row.categoryName });
-                }
-              }}
+              onSet={() =>
+                setModal({ kind: 'set', categoryId: row.categoryId, categoryName: row.categoryName })
+              }
               onEdit={() => {
-                setModal({
-                  kind: 'edit',
-                  budgetId: row.id,
-                  categoryName: row.categoryName,
-                  currentAmount: row.budgetAmount,
-                });
+                if (row.budgetId !== null) {
+                  setModal({
+                    kind: 'edit',
+                    budgetId: row.budgetId,
+                    categoryName: row.categoryName,
+                    currentAmount: row.budgetAmount,
+                  });
+                }
               }}
             />
           ))}
@@ -158,13 +189,13 @@ export function Budget() {
 }
 
 interface BudgetItemRowProps {
-  row: EnrichedBudgetItem;
+  row: BudgetRow;
   onSet: () => void;
   onEdit: () => void;
 }
 
 function BudgetItemRow({ row, onSet, onEdit }: BudgetItemRowProps) {
-  const hasBudget = row.budgetAmount > 0;
+  const hasBudget = row.budgetId !== null;
   const barWidth = Math.min(row.percentage, 100);
 
   return (
@@ -187,31 +218,27 @@ function BudgetItemRow({ row, onSet, onEdit }: BudgetItemRowProps) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <div className="text-right">
-            <p className="whitespace-nowrap text-sm font-semibold text-zinc-100">
-              {formatCurrency(row.spentAmount)}
-            </p>
-            {hasBudget ? (
-              <p className="whitespace-nowrap text-xs text-zinc-500">
-                / {formatCurrency(row.budgetAmount)}
-              </p>
-            ) : null}
-          </div>
           {hasBudget ? (
-            <button
-              type="button"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800 hover:text-emerald-400"
-              onClick={onEdit}
-              aria-label={`แก้ไขงบ ${row.categoryName}`}
-            >
-              <PencilIcon className="h-4 w-4" />
-            </button>
+            <>
+              <div className="text-right">
+                <p className="whitespace-nowrap text-sm font-semibold text-zinc-100">
+                  {formatCurrency(row.spentAmount)}
+                </p>
+                <p className="whitespace-nowrap text-xs text-zinc-500">
+                  / {formatCurrency(row.budgetAmount)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800 hover:text-emerald-400"
+                onClick={onEdit}
+                aria-label={`แก้ไขงบ ${row.categoryName}`}
+              >
+                <PencilIcon className="h-4 w-4" />
+              </button>
+            </>
           ) : (
-            <Button
-              onClick={onSet}
-              disabled={row.categoryId === null}
-              className="gap-1.5 px-3 text-xs"
-            >
+            <Button onClick={onSet} className="gap-1.5 px-3 text-xs">
               <PlusIcon className="h-3.5 w-3.5" />
               ตั้งงบ
             </Button>
