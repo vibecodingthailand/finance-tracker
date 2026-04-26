@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react';
 import { NavLink, Outlet } from 'react-router';
-import { HomeIcon, ListIcon, LogOutIcon, RepeatIcon, TagIcon, WalletIcon } from '../components/icons';
+import { ChartBarIcon, HomeIcon, ListIcon, LogOutIcon, RepeatIcon, TagIcon, WalletIcon } from '../components/icons';
 import { useAuth } from '../contexts/AuthContext';
 
 interface NavItem {
@@ -14,6 +14,7 @@ const navItems: NavItem[] = [
   { to: '/transactions', label: 'รายการ', icon: ListIcon },
   { to: '/categories', label: 'หมวดหมู่', icon: TagIcon },
   { to: '/recurring', label: 'รายการประจำ', icon: RepeatIcon },
+  { to: '/budget', label: 'งบประมาณ', icon: ChartBarIcon },
 ];
 
 const sidebarLinkClass = ({ isActive }: { isActive: boolean }) =>

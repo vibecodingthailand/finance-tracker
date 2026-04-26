@@ -148,3 +148,11 @@ export function RepeatIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function ChartBarIcon(props: IconProps) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="M3 3v18h18M7 16v-6M12 16V7M17 16v-3" />
+    </svg>
+  );
+}
