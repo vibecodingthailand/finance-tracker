@@ -4,6 +4,7 @@ import { RootLayout } from './layouts/RootLayout';
 import { Categories } from './pages/Categories';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
+import { Recurring } from './pages/Recurring';
 import { Register } from './pages/Register';
 import { Transactions } from './pages/Transactions';
 
@@ -23,6 +24,7 @@ export function App() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="categories" element={<Categories />} />
+        <Route path="recurring" element={<Recurring />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

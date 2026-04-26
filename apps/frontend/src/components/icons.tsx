@@ -121,3 +121,30 @@ export function TagIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function PencilIcon(props: IconProps) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </svg>
+  );
+}
+
+export function TrashIcon(props: IconProps) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    </svg>
+  );
+}
+
+export function RepeatIcon(props: IconProps) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  );
+}
