@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { CategoryModule } from './category/category.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { BudgetModule } from './budget/budget.module';
 import { RecurringModule } from './recurring/recurring.module';
 import { TransactionModule } from './transaction/transaction.module';
 
@@ -22,6 +23,7 @@ import { TransactionModule } from './transaction/transaction.module';
     CategoryModule,
     TransactionModule,
     RecurringModule,
+    BudgetModule,
   ],
   controllers: [AppController],
   providers: [AppService],
