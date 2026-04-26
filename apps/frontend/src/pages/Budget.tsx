@@ -15,7 +15,7 @@ interface EnrichedBudgetItem extends BudgetStatusItem {
 type ModalState =
   | { kind: 'closed' }
   | { kind: 'set'; categoryId: string; categoryName: string }
-  | { kind: 'edit'; categoryId: string; categoryName: string; currentAmount: number };
+  | { kind: 'edit'; budgetId: string; categoryName: string; currentAmount: number };
 
 function barColorClass(percentage: number, isOverBudget: boolean): string {
   if (isOverBudget || percentage > 100) return 'bg-rose-500';
@@ -88,8 +88,9 @@ export function Budget() {
     setRefreshKey((v) => v + 1);
   }, []);
 
-  const modalCategoryId = modal.kind !== 'closed' ? modal.categoryId : '';
+  const modalCategoryId = modal.kind === 'set' ? modal.categoryId : '';
   const modalCategoryName = modal.kind !== 'closed' ? modal.categoryName : '';
+  const modalBudgetId = modal.kind === 'edit' ? modal.budgetId : undefined;
   const modalCurrentAmount = modal.kind === 'edit' ? modal.currentAmount : undefined;
 
   return (
@@ -129,14 +130,12 @@ export function Budget() {
                 }
               }}
               onEdit={() => {
-                if (row.categoryId !== null) {
-                  setModal({
-                    kind: 'edit',
-                    categoryId: row.categoryId,
-                    categoryName: row.categoryName,
-                    currentAmount: row.budgetAmount,
-                  });
-                }
+                setModal({
+                  kind: 'edit',
+                  budgetId: row.id,
+                  categoryName: row.categoryName,
+                  currentAmount: row.budgetAmount,
+                });
               }}
             />
           ))}
@@ -152,6 +151,7 @@ export function Budget() {
         month={month}
         year={year}
         currentAmount={modalCurrentAmount}
+        budgetId={modalBudgetId}
       />
     </div>
   );

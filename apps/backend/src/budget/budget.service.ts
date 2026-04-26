@@ -93,6 +93,7 @@ export class BudgetService {
       const spentAmount = spentMap.get(b.categoryId) ?? 0;
       const percentage = budgetAmount > 0 ? Math.round((spentAmount / budgetAmount) * 1000) / 10 : 0;
       return {
+        id: b.id,
         categoryName: b.category.name,
         categoryIcon: b.category.icon,
         budgetAmount,

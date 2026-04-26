@@ -1,4 +1,5 @@
 export interface BudgetStatusItem {
+  id: string;
   categoryName: string;
   categoryIcon: string;
   budgetAmount: number;

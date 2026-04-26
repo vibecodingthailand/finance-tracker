@@ -15,6 +15,7 @@ interface BudgetFormModalProps {
   month: number;
   year: number;
   currentAmount?: number;
+  budgetId?: string;
 }
 
 export function BudgetFormModal({
@@ -26,6 +27,7 @@ export function BudgetFormModal({
   month,
   year,
   currentAmount,
+  budgetId,
 }: BudgetFormModalProps) {
   const isEdit = currentAmount !== undefined;
   const [amount, setAmount] = useState('');
@@ -57,7 +59,7 @@ export function BudgetFormModal({
     setFormError(null);
     try {
       if (isEdit) {
-        await apiFetch<void>(`/api/budgets/${categoryId}?month=${month}&year=${year}`, {
+        await apiFetch<void>(`/api/budgets/${budgetId}`, {
           method: 'PATCH',
           body: { amount: parsedAmount },
         });
@@ -73,7 +75,7 @@ export function BudgetFormModal({
     } finally {
       setSubmitting(false);
     }
-  }, [amount, isEdit, categoryId, month, year, onSuccess]);
+  }, [amount, isEdit, budgetId, categoryId, month, year, onSuccess]);
 
   return (
     <Modal
