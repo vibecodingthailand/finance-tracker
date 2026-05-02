@@ -75,11 +75,11 @@ describe('AuthService', () => {
       });
     });
 
-    it('rejects LINE-only accounts (empty password)', async () => {
+    it('rejects LINE-only accounts (null password)', async () => {
       repo.findByEmail.mockResolvedValue({
         id: 'u1',
         email: 'line:Uxxx',
-        password: '',
+        password: null,
       } as never);
       await expect(
         service.login({ email: 'line:Uxxx', password: 'anything' }),

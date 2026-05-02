@@ -14,7 +14,7 @@ export class LineRepo {
       create: {
         lineUserId,
         email: `line:${lineUserId}`,
-        password: '',
+        password: null,
         name: 'LINE User',
       },
     });
