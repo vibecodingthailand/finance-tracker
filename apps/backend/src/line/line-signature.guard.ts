@@ -13,7 +13,8 @@ export class LineSignatureGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<RawRequest>();
-    const signature = req.headers[LINE_SIGNATURE_HTTP_HEADER_NAME] as string;
+    const headerValue = req.headers[LINE_SIGNATURE_HTTP_HEADER_NAME];
+    const signature = typeof headerValue === 'string' ? headerValue : null;
     const secret = this.config.getOrThrow<string>('LINE_CHANNEL_SECRET');
 
     if (!signature || !req.rawBody) {

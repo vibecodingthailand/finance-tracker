@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuthResponse, LoginDto, RegisterDto, UserProfile } from '@finance-tracker/shared';
@@ -32,7 +37,7 @@ export class AuthService {
   async getProfile(userId: string): Promise<UserProfile> {
     const user = await this.authRepo.findById(userId);
     if (!user) {
-      throw new UnauthorizedException();
+      throw new NotFoundException('User not found');
     }
     return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };
   }

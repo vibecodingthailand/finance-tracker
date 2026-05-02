@@ -1,4 +1,4 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
@@ -88,9 +88,9 @@ describe('AuthService', () => {
   });
 
   describe('getProfile', () => {
-    it('throws UnauthorizedException when user not found', async () => {
+    it('throws NotFoundException when user not found', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.getProfile('1')).rejects.toThrow(UnauthorizedException);
+      await expect(service.getProfile('1')).rejects.toThrow(NotFoundException);
     });
 
     it('returns user profile', async () => {
@@ -109,9 +109,9 @@ describe('AuthService', () => {
       });
     });
 
-    it('returns UnauthorizedException for unknown userId', async () => {
+    it('throws NotFoundException for unknown userId', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.getProfile('nonexistent')).rejects.toThrow(UnauthorizedException);
+      await expect(service.getProfile('nonexistent')).rejects.toThrow(NotFoundException);
     });
   });
 
