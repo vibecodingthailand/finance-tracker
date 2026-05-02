@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@finance-tracker/database": "workspace:*",
     "@finance-tracker/shared": "workspace:*",
     "@line/bot-sdk": "^11.0.0",
