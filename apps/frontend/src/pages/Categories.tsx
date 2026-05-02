@@ -3,20 +3,20 @@ import {
   TransactionType,
   type CategoryResponse,
 } from '@finance-tracker/shared';
-import { PencilIcon, TrashIcon } from '../components/icons';
-import {
-  CategoryFormModal,
-  type CategoryFormPayload,
-} from '../components/CategoryFormModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
-import { PlusIcon } from '../components/icons';
+import { PencilIcon, PlusIcon, TrashIcon } from '../components/icons';
+import {
+  CategoryFormModal,
+  type CategoryFormPayload,
+} from '../components/CategoryFormModal';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { IconButton } from '../components/ui/IconButton';
+import { SegmentedControl, type SegmentedOption } from '../components/ui/SegmentedControl';
 import { useToast } from '../components/ui/Toast';
 import { ApiError, apiFetch } from '../lib/api';
 
@@ -25,8 +25,14 @@ type ModalState =
   | { kind: 'create'; type: TransactionType }
   | { kind: 'edit'; category: CategoryResponse };
 
+const tabOptions: SegmentedOption<TransactionType>[] = [
+  { value: TransactionType.EXPENSE, label: 'รายจ่าย', tone: 'expense' },
+  { value: TransactionType.INCOME, label: 'รายรับ', tone: 'income' },
+];
+
 export function Categories() {
   const toast = useToast();
+  const [activeTab, setActiveTab] = useState<TransactionType>(TransactionType.EXPENSE);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,14 +65,20 @@ export function Categories() {
     };
   }, [refreshKey]);
 
-  const incomeCategories = useMemo(
-    () => categories.filter((category) => category.type === TransactionType.INCOME),
-    [categories],
+  const filtered = useMemo(
+    () => categories.filter((category) => category.type === activeTab),
+    [categories, activeTab],
   );
-  const expenseCategories = useMemo(
-    () => categories.filter((category) => category.type === TransactionType.EXPENSE),
-    [categories],
-  );
+
+  const counts = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    for (const category of categories) {
+      if (category.type === TransactionType.INCOME) income += 1;
+      else expense += 1;
+    }
+    return { income, expense };
+  }, [categories]);
 
   const handleSubmit = useCallback(
     async (payload: CategoryFormPayload, id: string | null) => {
@@ -127,7 +139,7 @@ export function Categories() {
         subtitle="จัดการหมวดหมู่ของรายรับและรายจ่าย หมวดเริ่มต้นแก้ไขไม่ได้"
         action={
           <Button
-            onClick={() => setModal({ kind: 'create', type: TransactionType.EXPENSE })}
+            onClick={() => setModal({ kind: 'create', type: activeTab })}
             className="gap-2 sm:min-w-40"
           >
             <PlusIcon className="h-4 w-4" />
@@ -136,29 +148,48 @@ export function Categories() {
         }
       />
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SegmentedControl
+          value={activeTab}
+          onChange={setActiveTab}
+          options={tabOptions}
+          fullWidth={false}
+          ariaLabel="ประเภทหมวดหมู่"
+        />
+        <p className="text-xs text-zinc-500 sm:text-sm">
+          รายจ่าย{' '}
+          <span className="font-semibold text-zinc-200 tabular-nums">{counts.expense}</span>
+          {' · '}
+          รายรับ{' '}
+          <span className="font-semibold text-zinc-200 tabular-nums">{counts.income}</span>
+        </p>
+      </div>
+
       {error ? <ErrorState message={error} /> : null}
 
       {loading ? (
         <LoadingState variant="grid" rows={6} />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          title="ยังไม่มีหมวดหมู่"
+          description="เริ่มต้นสร้างหมวดหมู่ใหม่ของคุณ"
+        >
+          <Button onClick={() => setModal({ kind: 'create', type: activeTab })} className="gap-2">
+            <PlusIcon className="h-4 w-4" />
+            เพิ่มหมวดใหม่
+          </Button>
+        </EmptyState>
       ) : (
-        <div className="flex flex-col gap-8">
-          <CategorySection
-            title="รายรับ"
-            accentClass="text-emerald-400"
-            categories={incomeCategories}
-            onAdd={() => setModal({ kind: 'create', type: TransactionType.INCOME })}
-            onEdit={(category) => setModal({ kind: 'edit', category })}
-            onDelete={(category) => setPendingDelete(category)}
-          />
-          <CategorySection
-            title="รายจ่าย"
-            accentClass="text-rose-400"
-            categories={expenseCategories}
-            onAdd={() => setModal({ kind: 'create', type: TransactionType.EXPENSE })}
-            onEdit={(category) => setModal({ kind: 'edit', category })}
-            onDelete={(category) => setPendingDelete(category)}
-          />
-        </div>
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((category) => (
+            <CategoryCard
+              key={category.id}
+              category={category}
+              onEdit={(c) => setModal({ kind: 'edit', category: c })}
+              onDelete={(c) => setPendingDelete(c)}
+            />
+          ))}
+        </ul>
       )}
 
       <CategoryFormModal
@@ -184,52 +215,6 @@ export function Categories() {
         onClose={closeDeleteDialog}
       />
     </div>
-  );
-}
-
-interface CategorySectionProps {
-  title: string;
-  accentClass: string;
-  categories: CategoryResponse[];
-  onAdd: () => void;
-  onEdit: (category: CategoryResponse) => void;
-  onDelete: (category: CategoryResponse) => void;
-}
-
-function CategorySection({
-  title,
-  accentClass,
-  categories,
-  onAdd,
-  onEdit,
-  onDelete,
-}: CategorySectionProps) {
-  return (
-    <section>
-      <header className="mb-3 flex items-baseline justify-between">
-        <h2 className={`font-heading text-xl font-semibold ${accentClass}`}>{title}</h2>
-        <span className="text-xs text-zinc-500">{categories.length} หมวด</span>
-      </header>
-      {categories.length === 0 ? (
-        <EmptyState title="ยังไม่มีหมวดหมู่" description="เพิ่มหมวดหมู่ใหม่เพื่อเริ่มต้น">
-          <Button onClick={onAdd} className="gap-2">
-            <PlusIcon className="h-4 w-4" />
-            เพิ่มหมวดใหม่
-          </Button>
-        </EmptyState>
-      ) : (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {categories.map((category) => (
-            <CategoryCard
-              key={category.id}
-              category={category}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
 

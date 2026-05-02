@@ -7,6 +7,7 @@ import {
 } from '@finance-tracker/shared';
 import { TypeToggle } from './TypeToggle';
 import { Button } from './ui/Button';
+import { EmojiPicker } from './ui/EmojiPicker';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { ApiError } from '../lib/api';
@@ -117,15 +118,16 @@ export function CategoryFormModal({
           <p className="-mt-2 text-xs text-zinc-500">ไม่สามารถเปลี่ยนประเภทของหมวดหมู่ได้</p>
         ) : null}
 
-        <Input
-          label="ไอคอน"
-          name="icon"
-          maxLength={4}
-          placeholder="เช่น 🍜 หรือ ☕"
-          value={values.icon}
-          onChange={(event) => setValues((prev) => ({ ...prev, icon: event.target.value }))}
-          error={fieldErrors.icon}
-        />
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-zinc-300">ไอคอน</span>
+          <EmojiPicker
+            value={values.icon}
+            onChange={(next) => setValues((prev) => ({ ...prev, icon: next }))}
+          />
+          {fieldErrors.icon ? (
+            <span className="text-xs text-rose-400">{fieldErrors.icon}</span>
+          ) : null}
+        </div>
 
         <Input
           label="ชื่อหมวดหมู่"
