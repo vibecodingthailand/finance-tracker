@@ -109,7 +109,14 @@ export function Dashboard() {
         action={<MonthPicker month={month} year={year} onChange={handleMonthChange} />}
       />
 
-      <HeroSection summary={summary} prevSummary={prevSummary} loading={summaryLoading} error={summaryError} />
+      <HeroSection
+        summary={summary}
+        prevSummary={prevSummary}
+        loading={summaryLoading}
+        error={summaryError}
+        month={month}
+        year={year}
+      />
 
       <ChartsSection
         summary={summary}
@@ -132,16 +139,18 @@ interface HeroSectionProps {
   prevSummary: SummaryResponse | null;
   loading: boolean;
   error: string | null;
+  month: number;
+  year: number;
 }
 
-function HeroSection({ summary, prevSummary, loading, error }: HeroSectionProps) {
+function HeroSection({ summary, prevSummary, loading, error, month, year }: HeroSectionProps) {
   if (loading || !summary) {
     return <Skeleton className="h-44 sm:h-48" />;
   }
   if (error) {
     return <ErrorState message={error} />;
   }
-  return <BalanceHero summary={summary} prevSummary={prevSummary} />;
+  return <BalanceHero summary={summary} prevSummary={prevSummary} month={month} year={year} />;
 }
 
 interface ChartsSectionProps {
