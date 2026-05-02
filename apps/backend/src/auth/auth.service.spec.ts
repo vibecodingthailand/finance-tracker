@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 describe('AuthService', () => {
   let service: AuthService;
   let repo: jest.Mocked<AuthRepo>;
+  let jwt: jest.Mocked<JwtService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -26,6 +27,7 @@ describe('AuthService', () => {
 
     service = module.get(AuthService);
     repo = module.get(AuthRepo);
+    jwt = module.get(JwtService);
   });
 
   describe('register', () => {
@@ -94,6 +96,39 @@ describe('AuthService', () => {
         name: 'A',
         createdAt,
       });
+    });
+
+    it('returns UnauthorizedException for unknown userId', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.getProfile('nonexistent')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('register', () => {
+    it('stores a bcrypt-verifiable hash', async () => {
+      repo.findByEmail.mockResolvedValue(null);
+      repo.create.mockResolvedValue({ id: 'u1', email: 'a@b.com' } as never);
+      await service.register({ email: 'a@b.com', password: 'pass1234', name: 'A' });
+      const firstCall = repo.create.mock.calls[0];
+      expect(firstCall).toBeDefined();
+      const createArg = firstCall![0] as { password: string };
+      expect(await bcrypt.compare('pass1234', createArg.password)).toBe(true);
+    });
+  });
+
+  describe('JWT payload', () => {
+    it('register calls jwtService.sign with sub and email', async () => {
+      repo.findByEmail.mockResolvedValue(null);
+      repo.create.mockResolvedValue({ id: 'u1', email: 'a@b.com' } as never);
+      await service.register({ email: 'a@b.com', password: 'pass1234', name: 'A' });
+      expect(jwt.sign).toHaveBeenCalledWith({ sub: 'u1', email: 'a@b.com' });
+    });
+
+    it('login calls jwtService.sign with sub and email', async () => {
+      const hashed = await bcrypt.hash('pass1234', 10);
+      repo.findByEmail.mockResolvedValue({ id: 'u2', email: 'b@c.com', password: hashed } as never);
+      await service.login({ email: 'b@c.com', password: 'pass1234' });
+      expect(jwt.sign).toHaveBeenCalledWith({ sub: 'u2', email: 'b@c.com' });
     });
   });
 });

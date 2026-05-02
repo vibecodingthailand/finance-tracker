@@ -109,6 +109,17 @@ describe('TransactionService', () => {
   });
 
   describe('getSummary', () => {
+    it('returns zero totals and correct daily slots when no transactions exist', async () => {
+      repo.findForSummary.mockResolvedValue([]);
+      const result = await service.getSummary(userId, { month: 2, year: 2026 });
+      expect(result.totalIncome).toBe(0);
+      expect(result.totalExpense).toBe(0);
+      expect(result.balance).toBe(0);
+      expect(result.byCategoryExpense).toHaveLength(0);
+      expect(result.byCategoryIncome).toHaveLength(0);
+      expect(result.dailyTotals).toHaveLength(28);
+    });
+
     it('computes totals and daily breakdown correctly', async () => {
       const expenseTx = makeTransaction({
         type: TransactionType.EXPENSE,
@@ -139,6 +150,21 @@ describe('TransactionService', () => {
     });
   });
 
+  describe('findAll pagination edge cases', () => {
+    it('page 0 passes 0 to repo (exposes ?? behavior)', async () => {
+      repo.findAll.mockResolvedValue({ data: [], total: 0, page: 0, limit: 20 });
+      await service.findAll(userId, { page: 0 });
+      expect(repo.findAll).toHaveBeenCalledWith(userId, expect.objectContaining({ page: 0 }));
+    });
+
+    it('page beyond total returns empty data', async () => {
+      repo.findAll.mockResolvedValue({ data: [], total: 5, page: 9999, limit: 20 });
+      const result = await service.findAll(userId, { page: 9999 });
+      expect(result.data).toHaveLength(0);
+      expect(result.total).toBe(5);
+    });
+  });
+
   describe('update', () => {
     it('throws NotFoundException when transaction not found', async () => {
       repo.findById.mockResolvedValue(null);
@@ -158,6 +184,16 @@ describe('TransactionService', () => {
       await expect(
         service.update(userId, 'tx1', { categoryId: 'cat2' }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ForbiddenException when updating with another user\'s category', async () => {
+      repo.findById.mockResolvedValue(makeTransaction() as never);
+      repo.findCategoryForValidation.mockResolvedValue(
+        makeCategory({ id: 'cat2', type: TransactionType.EXPENSE, userId: 'other-user' }) as never,
+      );
+      await expect(
+        service.update(userId, 'tx1', { categoryId: 'cat2' }),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('updates and returns transaction', async () => {

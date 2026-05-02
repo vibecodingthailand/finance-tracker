@@ -127,5 +127,27 @@ describe('RecurringService', () => {
       await service.processRecurring();
       expect(repo.createTransaction).not.toHaveBeenCalled();
     });
+
+    it('skips recurrings with active: false', async () => {
+      repo.findActiveByDayOfMonth.mockResolvedValue([]);
+      await service.processRecurring();
+      expect(repo.createTransaction).not.toHaveBeenCalled();
+    });
+
+    it('does not create transactions when today is Feb 28 and only dayOfMonth=31 exists', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-02-28T00:00:00Z'));
+      repo.findActiveByDayOfMonth.mockResolvedValue([]);
+      await service.processRecurring();
+      expect(repo.findActiveByDayOfMonth).toHaveBeenCalledWith(28);
+      expect(repo.createTransaction).not.toHaveBeenCalled();
+      jest.useRealTimers();
+    });
+
+    it('propagates error when createTransaction fails (e.g., category deleted)', async () => {
+      repo.findActiveByDayOfMonth.mockResolvedValue([makeRecurring()] as never);
+      repo.createTransaction.mockRejectedValue(new Error('FK constraint failed'));
+      await expect(service.processRecurring()).rejects.toThrow('FK constraint failed');
+    });
   });
 });

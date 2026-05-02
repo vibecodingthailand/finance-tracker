@@ -220,6 +220,36 @@ describe('LineService', () => {
       expect(replyText).toContain('45,000');
       expect(replyText).toContain('1,250');
     });
+
+    it('passes today midnight-to-midnight date range to sumByPeriod', async () => {
+      lineRepo.findOrCreateByLineUserId.mockResolvedValue(MOCK_USER);
+      lineRepo.sumByPeriod.mockResolvedValue({ income: 0, expense: 0 });
+
+      const before = new Date();
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('สรุป')] });
+      await flush();
+
+      const [, start, end] = lineRepo.sumByPeriod.mock.calls[0] as [string, Date, Date];
+      expect(start.getHours()).toBe(0);
+      expect(start.getMinutes()).toBe(0);
+      expect(start.getSeconds()).toBe(0);
+      expect(end.getTime() - start.getTime()).toBe(24 * 60 * 60 * 1000);
+      expect(start.getFullYear()).toBe(before.getFullYear());
+      expect(start.getMonth()).toBe(before.getMonth());
+      expect(start.getDate()).toBe(before.getDate());
+    });
+
+    it('shows 0 for both totals when user has no transactions today', async () => {
+      lineRepo.findOrCreateByLineUserId.mockResolvedValue(MOCK_USER);
+      lineRepo.sumByPeriod.mockResolvedValue({ income: 0, expense: 0 });
+
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('สรุป')] });
+      await flush();
+
+      const replyText: string = replySpy.mock.calls[0]?.[0]?.messages?.[0]?.text ?? '';
+      expect(replyText).toContain('สรุปวันนี้');
+      expect(replyText).toContain('0');
+    });
   });
 
   describe('เดือนนี้ command', () => {
@@ -232,6 +262,33 @@ describe('LineService', () => {
 
       const replyText: string = replySpy.mock.calls[0]?.[0]?.messages?.[0]?.text ?? '';
       expect(replyText).toContain('สรุปเดือนนี้');
+    });
+
+    it('passes first-of-month to first-of-next-month date range to sumByPeriod', async () => {
+      lineRepo.findOrCreateByLineUserId.mockResolvedValue(MOCK_USER);
+      lineRepo.sumByPeriod.mockResolvedValue({ income: 0, expense: 0 });
+
+      const before = new Date();
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('เดือนนี้')] });
+      await flush();
+
+      const [, start, end] = lineRepo.sumByPeriod.mock.calls[0] as [string, Date, Date];
+      expect(start.getDate()).toBe(1);
+      expect(start.getHours()).toBe(0);
+      expect(end.getDate()).toBe(1);
+      expect(end.getMonth()).toBe((before.getMonth() + 1) % 12);
+    });
+
+    it('shows formatted amounts for large monthly totals', async () => {
+      lineRepo.findOrCreateByLineUserId.mockResolvedValue(MOCK_USER);
+      lineRepo.sumByPeriod.mockResolvedValue({ income: 100000, expense: 55000 });
+
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('เดือนนี้')] });
+      await flush();
+
+      const replyText: string = replySpy.mock.calls[0]?.[0]?.messages?.[0]?.text ?? '';
+      expect(replyText).toContain('100,000');
+      expect(replyText).toContain('55,000');
     });
   });
 
@@ -263,11 +320,45 @@ describe('LineService', () => {
       service.handleWebhook({ destination: 'U', events: [makeTextEvent('ยกเลิก')] });
       await flush();
 
+      expect(lineRepo.deleteTransaction).not.toHaveBeenCalled();
       expect(replySpy).toHaveBeenCalledWith(
         expect.objectContaining({
           messages: [{ type: 'text', text: 'ไม่มีรายการล่าสุด' }],
         }),
       );
+    });
+
+    it('includes the amount in the cancellation reply', async () => {
+      const lastTx = {
+        id: 'tx-2',
+        description: 'ค่าน้ำ',
+        amount: 350,
+      } as unknown as Transaction;
+      lineRepo.findLastTransaction.mockResolvedValue(lastTx);
+      lineRepo.deleteTransaction.mockResolvedValue(lastTx);
+
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('ยกเลิก')] });
+      await flush();
+
+      const replyText: string = replySpy.mock.calls[0]?.[0]?.messages?.[0]?.text ?? '';
+      expect(replyText).toContain('350');
+    });
+
+    it('handles a transaction with null description gracefully', async () => {
+      const lastTx = {
+        id: 'tx-3',
+        description: null,
+        amount: 100,
+      } as unknown as Transaction;
+      lineRepo.findLastTransaction.mockResolvedValue(lastTx);
+      lineRepo.deleteTransaction.mockResolvedValue(lastTx);
+
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('ยกเลิก')] });
+      await flush();
+
+      expect(lineRepo.deleteTransaction).toHaveBeenCalledWith('tx-3');
+      const replyText: string = replySpy.mock.calls[0]?.[0]?.messages?.[0]?.text ?? '';
+      expect(replyText).toContain('ยกเลิกรายการล่าสุดแล้ว');
     });
   });
 
