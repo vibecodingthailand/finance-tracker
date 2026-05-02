@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LinkService } from './link.service';
 
 interface AuthRequest {
-  user: { sub: string };
+  user: { userId: string };
 }
 
 @Controller('link')
@@ -15,6 +15,6 @@ export class LinkController {
   @HttpCode(201)
   @UseGuards(JwtAuthGuard)
   createCode(@Request() req: AuthRequest): Promise<LinkCodeResponse> {
-    return this.linkService.createCode(req.user.sub);
+    return this.linkService.createCode(req.user.userId);
   }
 }
