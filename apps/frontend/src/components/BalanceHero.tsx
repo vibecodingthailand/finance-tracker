@@ -140,7 +140,7 @@ export function BalanceHero({ summary, prevSummary, month, year }: BalanceHeroPr
         {showSparkline ? (
           <SparklinePanel points={sparkline} />
         ) : (
-          <div className="hidden flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 px-4 py-6 text-center sm:flex">
+          <div className="hidden h-full min-h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 px-4 py-6 text-center sm:flex">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
               ยอดสะสมรายวัน
             </p>
@@ -161,7 +161,7 @@ function SparklinePanel({ points }: { points: SparkPoint[] }) {
   const trough = points.reduce((min, p) => (p.balance < min.balance ? p : min), points[0]!);
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex h-full min-h-[180px] flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-3">
       <div className="flex items-baseline justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
           ยอดสะสมรายวัน
@@ -170,7 +170,7 @@ function SparklinePanel({ points }: { points: SparkPoint[] }) {
           วันที่ {points[0]?.day ?? 1}–{points[points.length - 1]?.day ?? 1}
         </p>
       </div>
-      <div className="relative h-20 w-full">
+      <div className="relative w-full flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={points} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <defs>
@@ -204,8 +204,9 @@ function SparklinePanel({ points }: { points: SparkPoint[] }) {
         </span>
       </div>
       <p className="text-[11px] text-zinc-500">
-        สูงสุด {formatCurrency(peak.balance)} (วันที่ {peak.day}) · ต่ำสุด{' '}
-        {formatCurrency(trough.balance)} (วันที่ {trough.day})
+        สูงสุด {formatCurrency(peak.balance)} (วันที่ {peak.day})
+        <span className="mx-1">·</span>
+        ต่ำสุด {formatCurrency(trough.balance)} (วันที่ {trough.day})
       </p>
     </div>
   );
