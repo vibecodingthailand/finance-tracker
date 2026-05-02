@@ -4,6 +4,7 @@ import type {
   PaginatedTransactionResponse,
   SummaryResponse,
 } from '@finance-tracker/shared';
+import { BalanceHero } from '../components/BalanceHero';
 import { CategoryPieChart } from '../components/CategoryPieChart';
 import { DailyBarChart } from '../components/DailyBarChart';
 import { ErrorState } from '../components/ErrorState';
@@ -11,8 +12,7 @@ import { LoadingState } from '../components/LoadingState';
 import { MonthPicker } from '../components/MonthPicker';
 import { PageHeader } from '../components/PageHeader';
 import { RecentTransactionsCard } from '../components/RecentTransactionsCard';
-import { SummaryCard } from '../components/SummaryCard';
-import { TrendingDownIcon, TrendingUpIcon, WalletIcon } from '../components/icons';
+import { TopCategoriesCard } from '../components/TopCategoriesCard';
 import { Skeleton } from '../components/ui/Skeleton';
 import { useQuickAdd } from '../contexts/QuickAddContext';
 import { ApiError, apiFetch } from '../lib/api';
@@ -22,12 +22,18 @@ const TRANSACTION_LIMIT = 10;
 
 const now = new Date();
 
+function previousMonth(month: number, year: number): { month: number; year: number } {
+  if (month === 1) return { month: 12, year: year - 1 };
+  return { month: month - 1, year };
+}
+
 export function Dashboard() {
   const { refreshVersion } = useQuickAdd();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  const [prevSummary, setPrevSummary] = useState<SummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
@@ -45,10 +51,18 @@ export function Dashboard() {
     let cancelled = false;
     setSummaryLoading(true);
     setSummaryError(null);
-    apiFetch<SummaryResponse>(`/api/transactions/summary?month=${month}&year=${year}`)
-      .then((result) => {
+    setPrevSummary(null);
+    const prev = previousMonth(month, year);
+    Promise.all([
+      apiFetch<SummaryResponse>(`/api/transactions/summary?month=${month}&year=${year}`),
+      apiFetch<SummaryResponse>(`/api/transactions/summary?month=${prev.month}&year=${prev.year}`).catch(
+        () => null,
+      ),
+    ])
+      .then(([current, previous]) => {
         if (cancelled) return;
-        setSummary(result);
+        setSummary(current);
+        setPrevSummary(previous);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -95,9 +109,13 @@ export function Dashboard() {
         action={<MonthPicker month={month} year={year} onChange={handleMonthChange} />}
       />
 
-      <SummarySection summary={summary} loading={summaryLoading} error={summaryError} />
+      <HeroSection summary={summary} prevSummary={prevSummary} loading={summaryLoading} error={summaryError} />
 
-      <ChartsSection summary={summary} loading={summaryLoading} error={summaryError} />
+      <ChartsSection
+        summary={summary}
+        loading={summaryLoading}
+        error={summaryError}
+      />
 
       <RecentSection
         transactions={transactions?.data ?? []}
@@ -109,41 +127,21 @@ export function Dashboard() {
   );
 }
 
-interface SummarySectionProps {
+interface HeroSectionProps {
   summary: SummaryResponse | null;
+  prevSummary: SummaryResponse | null;
   loading: boolean;
   error: string | null;
 }
 
-function SummarySection({ summary, loading, error }: SummarySectionProps) {
+function HeroSection({ summary, prevSummary, loading, error }: HeroSectionProps) {
   if (loading || !summary) {
-    return <LoadingState variant="cards" />;
+    return <Skeleton className="h-44 sm:h-48" />;
   }
   if (error) {
     return <ErrorState message={error} />;
   }
-  return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      <SummaryCard
-        label="รายรับรวม"
-        amount={summary.totalIncome}
-        tone="income"
-        icon={<TrendingUpIcon className="h-6 w-6" />}
-      />
-      <SummaryCard
-        label="รายจ่ายรวม"
-        amount={summary.totalExpense}
-        tone="expense"
-        icon={<TrendingDownIcon className="h-6 w-6" />}
-      />
-      <SummaryCard
-        label="คงเหลือ"
-        amount={summary.balance}
-        tone="balance"
-        icon={<WalletIcon className="h-6 w-6" />}
-      />
-    </div>
-  );
+  return <BalanceHero summary={summary} prevSummary={prevSummary} />;
 }
 
 interface ChartsSectionProps {
@@ -155,10 +153,9 @@ interface ChartsSectionProps {
 function ChartsSection({ summary, loading, error }: ChartsSectionProps) {
   if (loading || !summary) {
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Skeleton className="h-80" />
         <Skeleton className="h-80" />
-        <Skeleton className="h-80 md:col-span-2 lg:col-span-1" />
       </div>
     );
   }
@@ -166,11 +163,16 @@ function ChartsSection({ summary, loading, error }: ChartsSectionProps) {
     return null;
   }
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <CategoryPieChart title="รายจ่ายแยกหมวดหมู่" data={summary.byCategoryExpense} palette="expense" />
-      <CategoryPieChart title="รายรับแยกหมวดหมู่" data={summary.byCategoryIncome} palette="income" />
-      <DailyBarChart data={summary.dailyTotals} className="md:col-span-2 lg:col-span-1" />
-    </div>
+    <>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <TopCategoriesCard data={summary.byCategoryExpense} />
+        <DailyBarChart data={summary.dailyTotals} />
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <CategoryPieChart title="รายจ่ายแยกหมวดหมู่" data={summary.byCategoryExpense} palette="expense" />
+        <CategoryPieChart title="รายรับแยกหมวดหมู่" data={summary.byCategoryIncome} palette="income" />
+      </div>
+    </>
   );
 }
 
