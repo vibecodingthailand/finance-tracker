@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { messagingApi, webhook } from '@line/bot-sdk';
 import { toCategoryResponse } from '../category/category.mapper';
@@ -9,10 +9,11 @@ import { LineRepo } from './line.repo';
 import { parseThaiMessage } from './parsers/thai-message.parser';
 
 const LINK_PATTERN = /^เชื่อม\s+(\d{6})$/;
+const HELP_TEXT =
+  'วิธีใช้:\n• บันทึก: กาแฟ 65\n• สรุป - ยอดวันนี้\n• เดือนนี้ - ยอดเดือนนี้\n• ยกเลิก - ลบรายการล่าสุด';
 
 @Injectable()
 export class LineService {
-  private readonly logger = new Logger(LineService.name);
   private readonly client: messagingApi.MessagingApiClient;
 
   constructor(
@@ -27,14 +28,8 @@ export class LineService {
     });
   }
 
-  handleWebhook(body: webhook.CallbackRequest): void {
-    this.processEvents(body.events).catch((err: unknown) =>
-      this.logger.error('Failed to process LINE events', err),
-    );
-  }
-
-  private async processEvents(events: webhook.Event[]): Promise<void> {
-    for (const event of events) {
+  async handleWebhook(body: webhook.CallbackRequest): Promise<void> {
+    for (const event of body.events) {
       await this.handleEvent(event);
     }
   }
@@ -63,63 +58,90 @@ export class LineService {
   }
 
   private async buildReply(text: string, userId: string, lineUserId: string): Promise<string> {
-    const linkMatch = text.match(LINK_PATTERN);
-    if (linkMatch) {
-      const code = linkMatch[1]!;
-      const linkCode = await this.linkRepo.findValid(code);
-      if (!linkCode) return 'code ไม่ถูกต้องหรือหมดอายุแล้ว';
-      if (linkCode.userId === userId) return 'บัญชีนี้เชื่อมแล้ว';
-      await this.lineRepo.mergeLineUserIntoWebUser(userId, lineUserId, linkCode.userId);
-      await this.linkRepo.markUsed(linkCode.id);
-      return 'เชื่อมเรียบร้อย! บัญชี LINE ของคุณเชื่อมกับเว็บแล้ว';
-    }
+    return (
+      (await this.handleLinkCommand(text, userId, lineUserId)) ??
+      (await this.handleRecordCommand(text, userId)) ??
+      (await this.handleDailySummary(text, userId)) ??
+      (await this.handleMonthlySummary(text, userId)) ??
+      (await this.handleUndo(text, userId)) ??
+      HELP_TEXT
+    );
+  }
 
+  private async handleLinkCommand(
+    text: string,
+    userId: string,
+    lineUserId: string,
+  ): Promise<string | null> {
+    const match = text.match(LINK_PATTERN);
+    if (!match) return null;
+
+    const code = match[1]!;
+    const linkCode = await this.linkRepo.findValid(code);
+    if (!linkCode) return 'code ไม่ถูกต้องหรือหมดอายุแล้ว';
+    if (linkCode.userId === userId) return 'บัญชีนี้เชื่อมแล้ว';
+
+    await this.lineRepo.mergeLineUserIntoWebUser(userId, lineUserId, linkCode.userId);
+    await this.linkRepo.markUsed(linkCode.id);
+    return 'เชื่อมเรียบร้อย! บัญชี LINE ของคุณเชื่อมกับเว็บแล้ว';
+  }
+
+  private async handleRecordCommand(text: string, userId: string): Promise<string | null> {
     const parsed = parseThaiMessage(text);
-    if (parsed) {
-      const cats = await this.categoryRepo.findAllForUser(userId);
-      const category = await this.categorizer.categorize(
-        parsed.description,
-        parsed.type,
-        cats.map(toCategoryResponse),
-      );
-      await this.lineRepo.createTransaction({
-        amount: parsed.amount,
-        type: parsed.type,
-        description: parsed.description,
-        categoryId: category.id,
-        userId,
-      });
-      return `บันทึกแล้ว: ${parsed.description} ${this.formatAmount(parsed.amount)} บาท (${category.name})`;
-    }
+    if (!parsed) return null;
 
-    if (text === 'สรุป') {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      const { income, expense } = await this.lineRepo.sumByPeriod(userId, start, end);
-      return `สรุปวันนี้\nรายรับ: ${this.formatAmount(income)} บาท\nรายจ่าย: ${this.formatAmount(expense)} บาท`;
-    }
-
-    if (text === 'เดือนนี้') {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const { income, expense } = await this.lineRepo.sumByPeriod(userId, start, end);
-      return `สรุปเดือนนี้\nรายรับ: ${this.formatAmount(income)} บาท\nรายจ่าย: ${this.formatAmount(expense)} บาท`;
-    }
-
-    if (text === 'ยกเลิก') {
-      const last = await this.lineRepo.findLastTransaction(userId);
-      if (!last) return 'ไม่มีรายการล่าสุด';
-      await this.lineRepo.deleteTransaction(last.id);
-      const desc = last.description ? `${last.description} ` : '';
-      return `ยกเลิกรายการล่าสุดแล้ว: ${desc}${this.formatAmount(Number(last.amount))} บาท`;
-    }
-
-    return 'วิธีใช้:\n• บันทึก: กาแฟ 65\n• สรุป - ยอดวันนี้\n• เดือนนี้ - ยอดเดือนนี้\n• ยกเลิก - ลบรายการล่าสุด';
+    const cats = await this.categoryRepo.findAllForUser(userId);
+    const category = await this.categorizer.categorize(
+      parsed.description,
+      parsed.type,
+      cats.map(toCategoryResponse),
+    );
+    await this.lineRepo.createTransaction({
+      amount: parsed.amount,
+      type: parsed.type,
+      description: parsed.description,
+      categoryId: category.id,
+      userId,
+    });
+    return `บันทึกแล้ว: ${parsed.description} ${formatAmount(parsed.amount)} บาท (${category.name})`;
   }
 
-  private formatAmount(n: number): string {
-    return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  private async handleDailySummary(text: string, userId: string): Promise<string | null> {
+    if (text !== 'สรุป') return null;
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    return this.formatPeriodSummary('สรุปวันนี้', userId, start, end);
   }
+
+  private async handleMonthlySummary(text: string, userId: string): Promise<string | null> {
+    if (text !== 'เดือนนี้') return null;
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return this.formatPeriodSummary('สรุปเดือนนี้', userId, start, end);
+  }
+
+  private async handleUndo(text: string, userId: string): Promise<string | null> {
+    if (text !== 'ยกเลิก') return null;
+    const last = await this.lineRepo.findLastTransaction(userId);
+    if (!last) return 'ไม่มีรายการล่าสุด';
+    await this.lineRepo.deleteTransaction(last.id);
+    const desc = last.description ? `${last.description} ` : '';
+    return `ยกเลิกรายการล่าสุดแล้ว: ${desc}${formatAmount(Number(last.amount))} บาท`;
+  }
+
+  private async formatPeriodSummary(
+    label: string,
+    userId: string,
+    start: Date,
+    end: Date,
+  ): Promise<string> {
+    const { income, expense } = await this.lineRepo.sumByPeriod(userId, start, end);
+    return `${label}\nรายรับ: ${formatAmount(income)} บาท\nรายจ่าย: ${formatAmount(expense)} บาท`;
+  }
+}
+
+function formatAmount(n: number): string {
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }

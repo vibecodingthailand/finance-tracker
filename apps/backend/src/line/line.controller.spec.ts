@@ -107,7 +107,7 @@ describe('LineController', () => {
       providers: [
         {
           provide: LineService,
-          useValue: { handleWebhook: jest.fn() },
+          useValue: { handleWebhook: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     })
