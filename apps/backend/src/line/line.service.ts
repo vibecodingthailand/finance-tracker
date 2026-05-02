@@ -95,6 +95,7 @@ export class LineService {
       parsed.description,
       parsed.type,
       cats.map(toCategoryResponse),
+      userId,
     );
     await this.lineRepo.createTransaction({
       amount: parsed.amount,

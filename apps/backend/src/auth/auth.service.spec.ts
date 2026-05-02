@@ -74,6 +74,17 @@ describe('AuthService', () => {
         accessToken: 'tok',
       });
     });
+
+    it('rejects LINE-only accounts (empty password)', async () => {
+      repo.findByEmail.mockResolvedValue({
+        id: 'u1',
+        email: 'line:Uxxx',
+        password: '',
+      } as never);
+      await expect(
+        service.login({ email: 'line:Uxxx', password: 'anything' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
   });
 
   describe('getProfile', () => {

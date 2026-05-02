@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Recurring } from '@finance-tracker/database';
 import {
@@ -15,6 +15,8 @@ type RecurringWithCategory = Recurring & { category: { name: string; icon: strin
 
 @Injectable()
 export class RecurringService {
+  private readonly logger = new Logger(RecurringService.name);
+
   constructor(
     private readonly recurringRepo: RecurringRepo,
     private readonly categoryAccess: CategoryAccessService,
@@ -78,16 +80,33 @@ export class RecurringService {
   async processRecurring(): Promise<void> {
     const dayOfMonth = new Date().getDate();
     const items = await this.recurringRepo.findActiveByDayOfMonth(dayOfMonth);
-    await Promise.all(
-      items.map((item) =>
-        this.recurringRepo.createTransaction({
-          amount: item.amount.toNumber(),
-          type: item.type as TransactionType,
-          description: item.description ?? undefined,
-          categoryId: item.categoryId,
-          userId: item.userId,
-        }),
-      ),
+
+    const results = await Promise.allSettled(
+      items.map((item) => this.processOne(item)),
     );
+
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        this.logger.error('Failed to process recurring transaction', result.reason);
+      }
+    }
+  }
+
+  private async processOne(item: Recurring): Promise<void> {
+    const amount = item.amount.toNumber();
+    const alreadyCreated = await this.recurringRepo.hasRecurringTransactionToday(
+      item.userId,
+      item.categoryId,
+      amount,
+    );
+    if (alreadyCreated) return;
+
+    await this.recurringRepo.createTransaction({
+      amount,
+      type: item.type as TransactionType,
+      description: item.description ?? undefined,
+      categoryId: item.categoryId,
+      userId: item.userId,
+    });
   }
 }

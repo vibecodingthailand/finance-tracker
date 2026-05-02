@@ -72,4 +72,23 @@ export class RecurringRepo {
       data: { ...data, source: TransactionSource.RECURRING },
     });
   }
+
+  async hasRecurringTransactionToday(
+    userId: string,
+    categoryId: string,
+    amount: number,
+  ): Promise<boolean> {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const count = await this.prisma.transaction.count({
+      where: {
+        userId,
+        categoryId,
+        amount,
+        source: TransactionSource.RECURRING,
+        createdAt: { gte: startOfToday },
+      },
+    });
+    return count > 0;
+  }
 }

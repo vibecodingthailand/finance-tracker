@@ -40,6 +40,7 @@ describe('RecurringService', () => {
             update: jest.fn(),
             delete: jest.fn(),
             createTransaction: jest.fn(),
+            hasRecurringTransactionToday: jest.fn().mockResolvedValue(false),
           },
         },
         {
@@ -187,10 +188,26 @@ describe('RecurringService', () => {
       jest.useRealTimers();
     });
 
-    it('propagates error when createTransaction fails (e.g., category deleted)', async () => {
+    it('logs and continues when one createTransaction fails', async () => {
+      repo.findActiveByDayOfMonth.mockResolvedValue([
+        makeRecurring(),
+        makeRecurring({ id: 'rec2', categoryId: 'cat2' }),
+      ] as never);
+      repo.createTransaction
+        .mockRejectedValueOnce(new Error('FK constraint failed'))
+        .mockResolvedValueOnce({} as never);
+
+      await expect(service.processRecurring()).resolves.toBeUndefined();
+      expect(repo.createTransaction).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips creation when a transaction for the same recurring already exists today', async () => {
       repo.findActiveByDayOfMonth.mockResolvedValue([makeRecurring()] as never);
-      repo.createTransaction.mockRejectedValue(new Error('FK constraint failed'));
-      await expect(service.processRecurring()).rejects.toThrow('FK constraint failed');
+      repo.hasRecurringTransactionToday.mockResolvedValueOnce(true);
+
+      await service.processRecurring();
+
+      expect(repo.createTransaction).not.toHaveBeenCalled();
     });
   });
 });

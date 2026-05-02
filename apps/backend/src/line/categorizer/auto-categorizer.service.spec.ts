@@ -62,14 +62,14 @@ describe('AutoCategorizerService', () => {
     it('returns the category Haiku picked', async () => {
       createSpy.mockResolvedValueOnce(jsonResponse('cat-food') as never);
 
-      const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
+      const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
       expect(result.id).toBe('cat-food');
     });
 
     it('passes only categories matching the requested type to Haiku', async () => {
       createSpy.mockResolvedValueOnce(jsonResponse('cat-food') as never);
 
-      await service.categorize('กาแฟ', TransactionType.EXPENSE, ALL_CATEGORIES);
+      await service.categorize('กาแฟ', TransactionType.EXPENSE, ALL_CATEGORIES, 'user-1');
 
       const call = createSpy.mock.calls[0] as [{ messages: Array<{ content: string }> }];
       const prompt = call[0].messages[0]?.content ?? '';
@@ -82,7 +82,7 @@ describe('AutoCategorizerService', () => {
         content: [{ type: 'text', text: '  {"id":"cat-food"}  \n' }],
       } as never);
 
-      const result = await service.categorize('ข้าว', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
+      const result = await service.categorize('ข้าว', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
       expect(result.id).toBe('cat-food');
     });
 
@@ -91,7 +91,7 @@ describe('AutoCategorizerService', () => {
         content: [{ type: 'text', text: '```json\n{"id":"cat-food"}\n```' }],
       } as never);
 
-      const result = await service.categorize('ข้าว', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
+      const result = await service.categorize('ข้าว', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
       expect(result.id).toBe('cat-food');
     });
   });
@@ -100,8 +100,8 @@ describe('AutoCategorizerService', () => {
     it('returns cached result and does not call Haiku again', async () => {
       createSpy.mockResolvedValue(jsonResponse('cat-food') as never);
 
-      await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
-      await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
+      await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
+      await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
 
       expect(createSpy).toHaveBeenCalledTimes(1);
     });
@@ -109,8 +109,8 @@ describe('AutoCategorizerService', () => {
     it('treats description as case-insensitive for cache key', async () => {
       createSpy.mockResolvedValue(jsonResponse('cat-food') as never);
 
-      await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
-      await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
+      await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
+      await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
 
       expect(createSpy).toHaveBeenCalledTimes(1);
     });
@@ -120,10 +120,23 @@ describe('AutoCategorizerService', () => {
         .mockResolvedValueOnce(jsonResponse('cat-food') as never)
         .mockResolvedValueOnce(jsonResponse('cat-salary') as never);
 
-      await service.categorize('โบนัส', TransactionType.EXPENSE, ALL_CATEGORIES);
-      await service.categorize('โบนัส', TransactionType.INCOME, ALL_CATEGORIES);
+      await service.categorize('โบนัส', TransactionType.EXPENSE, ALL_CATEGORIES, 'user-1');
+      await service.categorize('โบนัส', TransactionType.INCOME, ALL_CATEGORIES, 'user-1');
 
       expect(createSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not reuse cache across different users', async () => {
+      createSpy
+        .mockResolvedValueOnce(jsonResponse('cat-food') as never)
+        .mockResolvedValueOnce(jsonResponse('cat-transport') as never);
+
+      const a = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-A');
+      const b = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-B');
+
+      expect(createSpy).toHaveBeenCalledTimes(2);
+      expect(a.id).toBe('cat-food');
+      expect(b.id).toBe('cat-transport');
     });
   });
 
@@ -131,14 +144,14 @@ describe('AutoCategorizerService', () => {
     it('falls back to อื่นๆ when Haiku returns an unrecognised ID', async () => {
       createSpy.mockResolvedValueOnce(jsonResponse('cat-does-not-exist') as never);
 
-      const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
+      const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
       expect(result.id).toBe('cat-other');
     });
 
     it('falls back to อื่นๆ when Haiku API throws', async () => {
       createSpy.mockRejectedValueOnce(new Error('API error'));
 
-      const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
+      const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES, 'user-1');
       expect(result.id).toBe('cat-other');
     });
 
@@ -146,13 +159,18 @@ describe('AutoCategorizerService', () => {
       createSpy.mockRejectedValueOnce(new Error('API error'));
 
       const noOtherCategories: CategoryResponse[] = [makeCategory('cat-food', 'อาหาร')];
-      const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, noOtherCategories);
+      const result = await service.categorize(
+        'กาแฟ',
+        TransactionType.EXPENSE,
+        noOtherCategories,
+        'user-1',
+      );
       expect(result.id).toBe('cat-food');
     });
 
     it('throws when no categories exist for the requested type', async () => {
       await expect(
-        service.categorize('กาแฟ', TransactionType.INCOME, EXPENSE_CATEGORIES),
+        service.categorize('กาแฟ', TransactionType.INCOME, EXPENSE_CATEGORIES, 'user-1'),
       ).rejects.toThrow();
     });
   });
