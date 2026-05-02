@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Recurring } from '@finance-tracker/database';
 import {
@@ -36,7 +41,23 @@ export class RecurringService {
     return items.map((r) => this.toResponse(r));
   }
 
+  private async validateCategory(
+    categoryId: string,
+    type: TransactionType,
+    userId: string,
+  ): Promise<void> {
+    const category = await this.recurringRepo.findCategoryForValidation(categoryId);
+    if (!category) throw new NotFoundException('Category not found');
+    if (category.userId !== null && category.userId !== userId) {
+      throw new ForbiddenException('Category not accessible');
+    }
+    if (category.type !== type) {
+      throw new BadRequestException('Category type does not match recurring type');
+    }
+  }
+
   async create(userId: string, dto: CreateRecurringDto): Promise<RecurringResponse> {
+    await this.validateCategory(dto.categoryId, dto.type, userId);
     const recurring = await this.recurringRepo.create({
       amount: dto.amount,
       type: dto.type,
@@ -52,6 +73,13 @@ export class RecurringService {
     const existing = await this.recurringRepo.findById(id);
     if (!existing) throw new NotFoundException();
     if (existing.userId !== userId) throw new ForbiddenException();
+
+    if (dto.categoryId !== undefined || dto.type !== undefined) {
+      const newCategoryId = dto.categoryId ?? existing.categoryId;
+      const newType = (dto.type ?? existing.type) as TransactionType;
+      await this.validateCategory(newCategoryId, newType, userId);
+    }
+
     const updated = await this.recurringRepo.update(id, dto);
     return this.toResponse(updated);
   }

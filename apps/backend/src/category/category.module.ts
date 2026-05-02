@@ -8,5 +8,6 @@ import { CategoryService } from './category.service';
   imports: [AuthModule],
   controllers: [CategoryController],
   providers: [CategoryService, CategoryRepo],
+  exports: [CategoryRepo],
 })
 export class CategoryModule {}

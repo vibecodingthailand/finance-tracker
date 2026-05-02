@@ -68,9 +68,16 @@ export class AutoCategorizerService {
     if (!block || block.type !== 'text') throw new Error('Unexpected response from Haiku');
 
     const raw = block.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-    const parsed = JSON.parse(raw) as { id: string };
-    if (!parsed.id) throw new Error('Haiku response missing id field');
-    return parsed.id;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      !('id' in parsed) ||
+      typeof (parsed as { id: unknown }).id !== 'string'
+    ) {
+      throw new Error('Haiku response missing or invalid id field');
+    }
+    return (parsed as { id: string }).id;
   }
 
   private fallback(categories: CategoryResponse[]): CategoryResponse {

@@ -11,7 +11,11 @@ export type { CategoryResponse } from './category/category.types';
 
 export { CreateBudgetDto } from './budget/create-budget.dto';
 export { UpdateBudgetDto } from './budget/update-budget.dto';
-export type { BudgetStatusItem, BudgetStatusResponse } from './budget/budget.types';
+export type {
+  BudgetResponse,
+  BudgetStatusItem,
+  BudgetStatusResponse,
+} from './budget/budget.types';
 
 export { CreateRecurringDto } from './recurring/create-recurring.dto';
 export { UpdateRecurringDto } from './recurring/update-recurring.dto';

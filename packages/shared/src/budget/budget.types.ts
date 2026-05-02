@@ -1,3 +1,13 @@
+export interface BudgetResponse {
+  id: string;
+  amount: number;
+  categoryId: string;
+  userId: string;
+  month: number;
+  year: number;
+  createdAt: Date;
+}
+
 export interface BudgetStatusItem {
   id: string;
   categoryId: string;

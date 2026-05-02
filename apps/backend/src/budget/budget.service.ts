@@ -6,21 +6,12 @@ import {
 } from '@nestjs/common';
 import { Budget } from '@finance-tracker/database';
 import {
+  BudgetResponse,
   BudgetStatusResponse,
   CreateBudgetDto,
   UpdateBudgetDto,
 } from '@finance-tracker/shared';
 import { BudgetRepo } from './budget.repo';
-
-interface BudgetResponse {
-  id: string;
-  amount: number;
-  categoryId: string;
-  userId: string;
-  month: number;
-  year: number;
-  createdAt: Date;
-}
 
 @Injectable()
 export class BudgetService {
