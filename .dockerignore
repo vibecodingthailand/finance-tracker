@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+.git
+.idea
+.vscode
+.env
+.env.*
+!.env.production.template
+screenshots
+README.md
+.claude
+.mcp.json
+*.log
+.DS_Store
