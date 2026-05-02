@@ -10,6 +10,7 @@ interface TransactionFilters {
   endDate?: string;
   categoryId?: string;
   type?: TransactionType;
+  search?: string;
 }
 
 @Injectable()
@@ -20,7 +21,7 @@ export class TransactionRepo {
     userId: string,
     filters: TransactionFilters,
   ): Promise<{ data: Transaction[]; total: number; page: number; limit: number }> {
-    const { page, limit, startDate, endDate, categoryId, type } = filters;
+    const { page, limit, startDate, endDate, categoryId, type, search } = filters;
     const where = {
       userId,
       ...(startDate ?? endDate
@@ -33,6 +34,9 @@ export class TransactionRepo {
         : {}),
       ...(categoryId ? { categoryId } : {}),
       ...(type ? { type } : {}),
+      ...(search && search.trim() !== ''
+        ? { description: { contains: search.trim(), mode: 'insensitive' as const } }
+        : {}),
     };
 
     const [data, total] = await Promise.all([

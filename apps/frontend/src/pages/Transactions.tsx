@@ -11,6 +11,7 @@ import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
 import { Pagination } from '../components/Pagination';
+import { SearchInput } from '../components/SearchInput';
 import { TransactionFilters, type TransactionFiltersValue } from '../components/TransactionFilters';
 import { TransactionFormModal } from '../components/TransactionFormModal';
 import { TransactionsTable } from '../components/TransactionsTable';
@@ -36,6 +37,7 @@ export function Transactions() {
   const toast = useToast();
   const { refreshVersion } = useQuickAdd();
   const [filters, setFilters] = useState<TransactionFiltersValue>(INITIAL_FILTERS);
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
   const [data, setData] = useState<PaginatedTransactionResponse | null>(null);
@@ -58,8 +60,9 @@ export function Transactions() {
     if (filters.type) params.set('type', filters.type);
     if (filters.startDate) params.set('startDate', `${filters.startDate}T00:00:00.000Z`);
     if (filters.endDate) params.set('endDate', `${filters.endDate}T23:59:59.999Z`);
+    if (search.trim() !== '') params.set('search', search.trim());
     return params.toString();
-  }, [filters, page]);
+  }, [filters, page, search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +104,12 @@ export function Transactions() {
 
   const handleFiltersReset = useCallback(() => {
     setFilters(INITIAL_FILTERS);
+    setSearch('');
+    setPage(1);
+  }, []);
+
+  const handleSearchChange = useCallback((next: string) => {
+    setSearch(next);
     setPage(1);
   }, []);
 
@@ -162,6 +171,12 @@ export function Transactions() {
             เพิ่มรายการ
           </Button>
         }
+      />
+
+      <SearchInput
+        value={search}
+        onChange={handleSearchChange}
+        placeholder="ค้นหาตามรายละเอียด..."
       />
 
       <Card className="px-5 py-4">

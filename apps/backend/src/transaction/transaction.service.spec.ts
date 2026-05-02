@@ -106,6 +106,12 @@ describe('TransactionService', () => {
       expect(result.data).toHaveLength(1);
       expect(result.total).toBe(1);
     });
+
+    it('forwards search query to repo', async () => {
+      repo.findAll.mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 });
+      await service.findAll(userId, { search: 'coffee' });
+      expect(repo.findAll).toHaveBeenCalledWith(userId, expect.objectContaining({ search: 'coffee' }));
+    });
   });
 
   describe('getSummary', () => {

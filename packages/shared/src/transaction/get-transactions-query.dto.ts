@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { TransactionType } from '../common/transaction-type.enum';
 
 export class GetTransactionsQueryDto {
@@ -30,4 +30,9 @@ export class GetTransactionsQueryDto {
   @IsOptional()
   @IsEnum(TransactionType)
   type?: TransactionType;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
 }

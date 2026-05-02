@@ -70,6 +70,7 @@ export class TransactionService {
       endDate: query.endDate,
       categoryId: query.categoryId,
       type: query.type,
+      search: query.search,
     });
     return {
       data: result.data.map((t) => this.toResponse(t)),

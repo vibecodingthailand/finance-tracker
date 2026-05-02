@@ -157,6 +157,26 @@ export function ChartBarIcon(props: IconProps) {
   );
 }
 
+export function SearchIcon(props: IconProps) {
+  return (
+    <svg {...baseProps} {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+export function SlidersIcon(props: IconProps) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="M4 6h11M4 12h7M4 18h13" />
+      <circle cx="18" cy="6" r="2" />
+      <circle cx="14" cy="12" r="2" />
+      <circle cx="20" cy="18" r="2" />
+    </svg>
+  );
+}
+
 export function SettingsIcon(props: IconProps) {
   return (
     <svg {...baseProps} {...props}>
