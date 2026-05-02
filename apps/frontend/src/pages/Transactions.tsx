@@ -18,6 +18,7 @@ import { PlusIcon } from '../components/icons';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { useToast } from '../components/ui/Toast';
+import { useQuickAdd } from '../contexts/QuickAddContext';
 import { ApiError, apiFetch } from '../lib/api';
 
 const PAGE_SIZE = 20;
@@ -33,6 +34,7 @@ type ModalMode = 'closed' | 'create' | { kind: 'edit'; transaction: TransactionR
 
 export function Transactions() {
   const toast = useToast();
+  const { refreshVersion } = useQuickAdd();
   const [filters, setFilters] = useState<TransactionFiltersValue>(INITIAL_FILTERS);
   const [page, setPage] = useState(1);
 
@@ -78,7 +80,7 @@ export function Transactions() {
     return () => {
       cancelled = true;
     };
-  }, [queryString, refreshKey]);
+  }, [queryString, refreshKey, refreshVersion]);
 
   useEffect(() => {
     let cancelled = false;

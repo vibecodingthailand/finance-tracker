@@ -14,6 +14,7 @@ import { RecentTransactionsCard } from '../components/RecentTransactionsCard';
 import { SummaryCard } from '../components/SummaryCard';
 import { TrendingDownIcon, TrendingUpIcon, WalletIcon } from '../components/icons';
 import { Skeleton } from '../components/ui/Skeleton';
+import { useQuickAdd } from '../contexts/QuickAddContext';
 import { ApiError, apiFetch } from '../lib/api';
 import { THAI_MONTH_NAMES } from '../lib/format';
 
@@ -22,6 +23,7 @@ const TRANSACTION_LIMIT = 10;
 const now = new Date();
 
 export function Dashboard() {
+  const { refreshVersion } = useQuickAdd();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
@@ -58,7 +60,7 @@ export function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [month, year]);
+  }, [month, year, refreshVersion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +85,7 @@ export function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshVersion]);
 
   return (
     <div className="flex flex-col gap-6 animate-[fadeIn_300ms_ease-out]">
