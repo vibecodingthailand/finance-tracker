@@ -7,7 +7,9 @@ import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
 import { PencilIcon, PlusIcon } from '../components/icons';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
 import { IconButton } from '../components/ui/IconButton';
 import { ApiError, apiFetch } from '../lib/api';
 import { formatCurrency, THAI_MONTH_NAMES } from '../lib/format';
@@ -28,19 +30,51 @@ type ModalState =
   | { kind: 'set'; categoryId: string; categoryName: string }
   | { kind: 'edit'; budgetId: string; categoryName: string; currentAmount: number };
 
-function barColorClass(percentage: number, isOverBudget: boolean): string {
-  if (isOverBudget || percentage > 100) return 'bg-rose-500';
-  if (percentage >= 80) return 'bg-orange-400';
-  if (percentage >= 60) return 'bg-yellow-400';
-  return 'bg-emerald-500';
+type RowStatus = 'overBudget' | 'critical' | 'warn' | 'safe' | 'unset';
+
+function rowStatus(row: BudgetRow): RowStatus {
+  if (!row.budgetId) return 'unset';
+  if (row.isOverBudget || row.percentage > 100) return 'overBudget';
+  if (row.percentage >= 80) return 'critical';
+  if (row.percentage >= 60) return 'warn';
+  return 'safe';
 }
 
-function textColorClass(percentage: number, isOverBudget: boolean): string {
-  if (isOverBudget || percentage > 100) return 'text-rose-400';
-  if (percentage >= 80) return 'text-orange-400';
-  if (percentage >= 60) return 'text-yellow-400';
-  return 'text-emerald-400';
+function barColorClass(status: RowStatus): string {
+  switch (status) {
+    case 'overBudget':
+      return 'bg-rose-500';
+    case 'critical':
+      return 'bg-orange-400';
+    case 'warn':
+      return 'bg-amber-400';
+    default:
+      return 'bg-emerald-500';
+  }
 }
+
+function textColorClass(status: RowStatus): string {
+  switch (status) {
+    case 'overBudget':
+      return 'text-rose-400';
+    case 'critical':
+      return 'text-orange-400';
+    case 'warn':
+      return 'text-amber-400';
+    case 'safe':
+      return 'text-emerald-400';
+    default:
+      return 'text-zinc-500';
+  }
+}
+
+const statusOrder: Record<RowStatus, number> = {
+  overBudget: 0,
+  critical: 1,
+  warn: 2,
+  safe: 3,
+  unset: 4,
+};
 
 export function Budget() {
   const now = new Date();
@@ -118,6 +152,33 @@ export function Budget() {
     [categories, budgetByCategoryId],
   );
 
+  const sortedRows = useMemo(
+    () =>
+      [...rows].sort((a, b) => {
+        const statusDiff = statusOrder[rowStatus(a)] - statusOrder[rowStatus(b)];
+        if (statusDiff !== 0) return statusDiff;
+        return b.percentage - a.percentage;
+      }),
+    [rows],
+  );
+
+  const totals = useMemo(() => {
+    let totalBudget = 0;
+    let totalSpent = 0;
+    let withBudget = 0;
+    let overCount = 0;
+    for (const row of rows) {
+      if (row.budgetId !== null) {
+        withBudget += 1;
+        totalBudget += row.budgetAmount;
+        totalSpent += row.spentAmount;
+        if (rowStatus(row) === 'overBudget') overCount += 1;
+      }
+    }
+    const percentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+    return { totalBudget, totalSpent, withBudget, overCount, percentage };
+  }, [rows]);
+
   const handleSuccess = useCallback(() => {
     setModal({ kind: 'closed' });
     setRefreshKey((v) => v + 1);
@@ -130,10 +191,7 @@ export function Budget() {
 
   return (
     <div className="flex flex-col gap-6 animate-[fadeIn_300ms_ease-out]">
-      <PageHeader
-        title="งบประมาณ"
-        subtitle={`${THAI_MONTH_NAMES[month - 1]} ${year}`}
-      />
+      <PageHeader title="งบประมาณ" subtitle={`${THAI_MONTH_NAMES[month - 1]} ${year}`} />
 
       {error ? <ErrorState message={error} /> : null}
 
@@ -145,27 +203,34 @@ export function Budget() {
           description="เพิ่มหมวดหมู่รายจ่ายก่อนเพื่อตั้งงบประมาณ"
         />
       ) : (
-        <ul className="flex flex-col gap-3">
-          {rows.map((row) => (
-            <BudgetItemRow
-              key={row.categoryId}
-              row={row}
-              onSet={() =>
-                setModal({ kind: 'set', categoryId: row.categoryId, categoryName: row.categoryName })
-              }
-              onEdit={() => {
-                if (row.budgetId !== null) {
+        <>
+          <BudgetOverviewCard totals={totals} />
+          <ul className="flex flex-col gap-3">
+            {sortedRows.map((row) => (
+              <BudgetItemRow
+                key={row.categoryId}
+                row={row}
+                onSet={() =>
                   setModal({
-                    kind: 'edit',
-                    budgetId: row.budgetId,
+                    kind: 'set',
+                    categoryId: row.categoryId,
                     categoryName: row.categoryName,
-                    currentAmount: row.budgetAmount,
-                  });
+                  })
                 }
-              }}
-            />
-          ))}
-        </ul>
+                onEdit={() => {
+                  if (row.budgetId !== null) {
+                    setModal({
+                      kind: 'edit',
+                      budgetId: row.budgetId,
+                      categoryName: row.categoryName,
+                      currentAmount: row.budgetAmount,
+                    });
+                  }
+                }}
+              />
+            ))}
+          </ul>
+        </>
       )}
 
       <BudgetFormModal
@@ -183,6 +248,72 @@ export function Budget() {
   );
 }
 
+interface BudgetOverviewCardProps {
+  totals: {
+    totalBudget: number;
+    totalSpent: number;
+    withBudget: number;
+    overCount: number;
+    percentage: number;
+  };
+}
+
+function BudgetOverviewCard({ totals }: BudgetOverviewCardProps) {
+  const { totalBudget, totalSpent, withBudget, overCount, percentage } = totals;
+  if (withBudget === 0) {
+    return (
+      <Card className="flex items-start justify-between gap-4 px-5 py-5">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+            ภาพรวมงบประมาณเดือนนี้
+          </p>
+          <p className="mt-1 text-sm text-zinc-400">ยังไม่ได้ตั้งงบ — เริ่มจากหมวดที่จ่ายบ่อยที่สุด</p>
+        </div>
+      </Card>
+    );
+  }
+
+  const status: RowStatus =
+    percentage > 100 ? 'overBudget' : percentage >= 80 ? 'critical' : percentage >= 60 ? 'warn' : 'safe';
+  const remaining = totalBudget - totalSpent;
+  const barWidth = Math.min(percentage, 100);
+
+  return (
+    <Card className="flex flex-col gap-4 px-5 py-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+            ภาพรวมงบประมาณเดือนนี้
+          </p>
+          <p className="mt-1 font-heading text-2xl font-bold tabular-nums text-zinc-100 sm:text-3xl">
+            {formatCurrency(totalSpent)}{' '}
+            <span className="text-base font-medium text-zinc-500">
+              / {formatCurrency(totalBudget)}
+            </span>
+          </p>
+          <p className={`mt-1 text-sm font-semibold tabular-nums ${textColorClass(status)}`}>
+            ใช้ไป {percentage.toFixed(1)}%
+            {remaining >= 0
+              ? ` · เหลือ ${formatCurrency(remaining)}`
+              : ` · เกิน ${formatCurrency(Math.abs(remaining))}`}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1.5 text-right">
+          <Badge tone="info">ตั้งงบ {withBudget} หมวด</Badge>
+          {overCount > 0 ? <Badge tone="danger">เกินงบ {overCount} หมวด</Badge> : null}
+        </div>
+      </div>
+
+      <div className="h-3 overflow-hidden rounded-full bg-zinc-800">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColorClass(status)}`}
+          style={{ width: `${barWidth}%` }}
+        />
+      </div>
+    </Card>
+  );
+}
+
 interface BudgetItemRowProps {
   row: BudgetRow;
   onSet: () => void;
@@ -191,10 +322,11 @@ interface BudgetItemRowProps {
 
 function BudgetItemRow({ row, onSet, onEdit }: BudgetItemRowProps) {
   const hasBudget = row.budgetId !== null;
+  const status = rowStatus(row);
   const barWidth = Math.min(row.percentage, 100);
 
   return (
-    <li className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-4 shadow-lg">
+    <li className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-4 shadow-lg transition hover:border-zinc-700">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xl">
@@ -203,8 +335,9 @@ function BudgetItemRow({ row, onSet, onEdit }: BudgetItemRowProps) {
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-zinc-100">{row.categoryName}</p>
             {hasBudget ? (
-              <p className={`text-xs font-semibold ${textColorClass(row.percentage, row.isOverBudget)}`}>
-                {row.percentage.toFixed(0)}%{row.isOverBudget ? ' · เกินงบ!' : ''}
+              <p className={`text-xs font-semibold tabular-nums ${textColorClass(status)}`}>
+                {row.percentage.toFixed(0)}%
+                {status === 'overBudget' ? ' · เกินงบ' : ''}
               </p>
             ) : (
               <p className="text-xs text-zinc-500">ยังไม่ได้ตั้งงบ</p>
@@ -216,10 +349,10 @@ function BudgetItemRow({ row, onSet, onEdit }: BudgetItemRowProps) {
           {hasBudget ? (
             <>
               <div className="text-right">
-                <p className="whitespace-nowrap text-sm font-semibold text-zinc-100">
+                <p className="whitespace-nowrap text-sm font-semibold text-zinc-100 tabular-nums">
                   {formatCurrency(row.spentAmount)}
                 </p>
-                <p className="whitespace-nowrap text-xs text-zinc-500">
+                <p className="whitespace-nowrap text-xs text-zinc-500 tabular-nums">
                   / {formatCurrency(row.budgetAmount)}
                 </p>
               </div>
@@ -228,7 +361,7 @@ function BudgetItemRow({ row, onSet, onEdit }: BudgetItemRowProps) {
               </IconButton>
             </>
           ) : (
-            <Button onClick={onSet} className="gap-1.5 px-3 text-xs">
+            <Button size="sm" onClick={onSet} className="gap-1.5">
               <PlusIcon className="h-3.5 w-3.5" />
               ตั้งงบ
             </Button>
@@ -237,10 +370,10 @@ function BudgetItemRow({ row, onSet, onEdit }: BudgetItemRowProps) {
       </div>
 
       {hasBudget ? (
-        <div className="mt-3">
+        <div className="mt-3 space-y-1.5">
           <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${barColorClass(row.percentage, row.isOverBudget)}`}
+              className={`h-full rounded-full transition-all duration-500 ${barColorClass(status)}`}
               style={{ width: `${barWidth}%` }}
             />
           </div>
