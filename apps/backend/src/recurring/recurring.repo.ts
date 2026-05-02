@@ -21,15 +21,6 @@ export class RecurringRepo {
     return this.prisma.recurring.findUnique({ where: { id } });
   }
 
-  findCategoryForValidation(
-    categoryId: string,
-  ): Promise<{ id: string; type: string; userId: string | null } | null> {
-    return this.prisma.category.findUnique({
-      where: { id: categoryId },
-      select: { id: true, type: true, userId: true },
-    });
-  }
-
   findActiveByDayOfMonth(dayOfMonth: number): Promise<Recurring[]> {
     return this.prisma.recurring.findMany({ where: { active: true, dayOfMonth } });
   }

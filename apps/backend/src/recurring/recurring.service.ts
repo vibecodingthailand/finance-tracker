@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Recurring } from '@finance-tracker/database';
 import {
@@ -12,13 +7,18 @@ import {
   TransactionType,
   UpdateRecurringDto,
 } from '@finance-tracker/shared';
+import { CategoryAccessService } from '../category/category-access.service';
+import { assertOwnership } from '../common/assert-ownership';
 import { RecurringRepo } from './recurring.repo';
 
 type RecurringWithCategory = Recurring & { category: { name: string; icon: string } };
 
 @Injectable()
 export class RecurringService {
-  constructor(private readonly recurringRepo: RecurringRepo) {}
+  constructor(
+    private readonly recurringRepo: RecurringRepo,
+    private readonly categoryAccess: CategoryAccessService,
+  ) {}
 
   private toResponse(r: RecurringWithCategory): RecurringResponse {
     return {
@@ -41,23 +41,8 @@ export class RecurringService {
     return items.map((r) => this.toResponse(r));
   }
 
-  private async validateCategory(
-    categoryId: string,
-    type: TransactionType,
-    userId: string,
-  ): Promise<void> {
-    const category = await this.recurringRepo.findCategoryForValidation(categoryId);
-    if (!category) throw new NotFoundException('Category not found');
-    if (category.userId !== null && category.userId !== userId) {
-      throw new ForbiddenException('Category not accessible');
-    }
-    if (category.type !== type) {
-      throw new BadRequestException('Category type does not match recurring type');
-    }
-  }
-
   async create(userId: string, dto: CreateRecurringDto): Promise<RecurringResponse> {
-    await this.validateCategory(dto.categoryId, dto.type, userId);
+    await this.categoryAccess.ensureAccess(dto.categoryId, userId, dto.type);
     const recurring = await this.recurringRepo.create({
       amount: dto.amount,
       type: dto.type,
@@ -71,13 +56,12 @@ export class RecurringService {
 
   async update(userId: string, id: string, dto: UpdateRecurringDto): Promise<RecurringResponse> {
     const existing = await this.recurringRepo.findById(id);
-    if (!existing) throw new NotFoundException();
-    if (existing.userId !== userId) throw new ForbiddenException();
+    assertOwnership(existing, userId, 'Recurring');
 
     if (dto.categoryId !== undefined || dto.type !== undefined) {
       const newCategoryId = dto.categoryId ?? existing.categoryId;
       const newType = (dto.type ?? existing.type) as TransactionType;
-      await this.validateCategory(newCategoryId, newType, userId);
+      await this.categoryAccess.ensureAccess(newCategoryId, userId, newType);
     }
 
     const updated = await this.recurringRepo.update(id, dto);
@@ -86,8 +70,7 @@ export class RecurringService {
 
   async delete(userId: string, id: string): Promise<void> {
     const existing = await this.recurringRepo.findById(id);
-    if (!existing) throw new NotFoundException();
-    if (existing.userId !== userId) throw new ForbiddenException();
+    assertOwnership(existing, userId, 'Recurring');
     await this.recurringRepo.delete(id);
   }
 

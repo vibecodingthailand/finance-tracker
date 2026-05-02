@@ -8,7 +8,6 @@ import {
   Patch,
   Post,
   Query,
-  Request,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -17,12 +16,9 @@ import {
   GetTransactionsQueryDto,
   UpdateTransactionDto,
 } from '@finance-tracker/shared';
+import { AuthUser, CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TransactionService } from './transaction.service';
-
-interface AuthRequest {
-  user: { userId: string; email: string };
-}
 
 @UseGuards(JwtAuthGuard)
 @Controller('transactions')
@@ -30,28 +26,28 @@ export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
 
   @Get('summary')
-  getSummary(@Request() req: AuthRequest, @Query() query: GetSummaryQueryDto) {
-    return this.transactionService.getSummary(req.user.userId, query);
+  getSummary(@CurrentUser() user: AuthUser, @Query() query: GetSummaryQueryDto) {
+    return this.transactionService.getSummary(user.userId, query);
   }
 
   @Get()
-  findAll(@Request() req: AuthRequest, @Query() query: GetTransactionsQueryDto) {
-    return this.transactionService.findAll(req.user.userId, query);
+  findAll(@CurrentUser() user: AuthUser, @Query() query: GetTransactionsQueryDto) {
+    return this.transactionService.findAll(user.userId, query);
   }
 
   @Post()
-  create(@Request() req: AuthRequest, @Body() dto: CreateTransactionDto) {
-    return this.transactionService.create(req.user.userId, dto);
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateTransactionDto) {
+    return this.transactionService.create(user.userId, dto);
   }
 
   @Patch(':id')
-  update(@Request() req: AuthRequest, @Param('id') id: string, @Body() dto: UpdateTransactionDto) {
-    return this.transactionService.update(req.user.userId, id, dto);
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateTransactionDto) {
+    return this.transactionService.update(user.userId, id, dto);
   }
 
   @HttpCode(204)
   @Delete(':id')
-  delete(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.transactionService.delete(req.user.userId, id);
+  delete(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.transactionService.delete(user.userId, id);
   }
 }

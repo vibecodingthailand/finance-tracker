@@ -1,11 +1,8 @@
-import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { LoginDto, RegisterDto } from '@finance-tracker/shared';
 import { AuthService } from './auth.service';
+import { AuthUser, CurrentUser } from './current-user.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
-
-interface AuthRequest {
-  user: { userId: string; email: string };
-}
 
 @Controller('auth')
 export class AuthController {
@@ -23,7 +20,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  me(@Request() req: AuthRequest) {
-    return this.authService.getProfile(req.user.userId);
+  me(@CurrentUser() user: AuthUser) {
+    return this.authService.getProfile(user.userId);
   }
 }

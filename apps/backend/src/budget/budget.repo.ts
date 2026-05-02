@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Budget } from '@finance-tracker/database';
+import { monthRange } from '../common/date-range';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -14,15 +15,14 @@ export class BudgetRepo {
   }
 
   findSpentByCategory(userId: string, month: number, year: number, categoryIds: string[]) {
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const { start, end } = monthRange(month, year);
     return this.prisma.transaction.groupBy({
       by: ['categoryId'],
       where: {
         userId,
         type: 'EXPENSE',
         categoryId: { in: categoryIds },
-        createdAt: { gte: startDate, lte: endDate },
+        createdAt: { gte: start, lte: end },
       },
       _sum: { amount: true },
     });
@@ -40,15 +40,6 @@ export class BudgetRepo {
   ): Promise<Budget | null> {
     return this.prisma.budget.findUnique({
       where: { userId_categoryId_month_year: { userId, categoryId, month, year } },
-    });
-  }
-
-  findCategoryForValidation(
-    categoryId: string,
-  ): Promise<{ id: string; userId: string | null } | null> {
-    return this.prisma.category.findUnique({
-      where: { id: categoryId },
-      select: { id: true, userId: true },
     });
   }
 

@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { CategoryAccessService } from '../category/category-access.service';
 import { BudgetRepo } from './budget.repo';
 import { BudgetService } from './budget.service';
 
@@ -16,11 +17,10 @@ const mockBudget = {
   updatedAt: new Date('2026-04-01'),
 };
 
-const mockCategory = { id: 'cat1', userId: null };
-
 describe('BudgetService', () => {
   let service: BudgetService;
   let repo: jest.Mocked<BudgetRepo>;
+  let categoryAccess: jest.Mocked<CategoryAccessService>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -29,7 +29,6 @@ describe('BudgetService', () => {
         {
           provide: BudgetRepo,
           useValue: {
-            findCategoryForValidation: jest.fn(),
             findByConstraint: jest.fn(),
             findBudgetsWithCategory: jest.fn(),
             findSpentByCategory: jest.fn(),
@@ -39,23 +38,29 @@ describe('BudgetService', () => {
             delete: jest.fn(),
           },
         },
+        {
+          provide: CategoryAccessService,
+          useValue: { ensureAccess: jest.fn() },
+        },
       ],
     }).compile();
 
     service = module.get(BudgetService);
     repo = module.get(BudgetRepo);
+    categoryAccess = module.get(CategoryAccessService);
   });
 
   describe('create', () => {
     const dto = { amount: 1000, categoryId: 'cat1', month: 4, year: 2026 };
 
     it('creates a budget and returns response', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(mockCategory);
+      categoryAccess.ensureAccess.mockResolvedValue();
       repo.findByConstraint.mockResolvedValue(null);
       repo.create.mockResolvedValue(mockBudget);
 
       const result = await service.create('user1', dto);
 
+      expect(categoryAccess.ensureAccess).toHaveBeenCalledWith('cat1', 'user1');
       expect(result).toMatchObject({ id: 'b1', amount: 1000, month: 4, year: 2026 });
       expect(repo.create).toHaveBeenCalledWith({
         amount: 1000,
@@ -67,17 +72,17 @@ describe('BudgetService', () => {
     });
 
     it('throws NotFoundException when category does not exist', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(null);
+      categoryAccess.ensureAccess.mockRejectedValue(new NotFoundException());
       await expect(service.create('user1', dto)).rejects.toThrow(NotFoundException);
     });
 
     it('throws ForbiddenException when category belongs to another user', async () => {
-      repo.findCategoryForValidation.mockResolvedValue({ id: 'cat1', userId: 'other' });
+      categoryAccess.ensureAccess.mockRejectedValue(new ForbiddenException());
       await expect(service.create('user1', dto)).rejects.toThrow(ForbiddenException);
     });
 
     it('throws ConflictException when budget already exists', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(mockCategory);
+      categoryAccess.ensureAccess.mockResolvedValue();
       repo.findByConstraint.mockResolvedValue(mockBudget);
       await expect(service.create('user1', dto)).rejects.toThrow(ConflictException);
     });

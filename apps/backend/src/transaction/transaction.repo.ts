@@ -64,15 +64,6 @@ export class TransactionRepo {
     return this.prisma.transaction.findUnique({ where: { id } });
   }
 
-  findCategoryForValidation(
-    categoryId: string,
-  ): Promise<{ id: string; type: string; userId: string | null } | null> {
-    return this.prisma.category.findUnique({
-      where: { id: categoryId },
-      select: { id: true, type: true, userId: true },
-    });
-  }
-
   create(data: {
     amount: number;
     type: TransactionType;

@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { Budget } from '@finance-tracker/database';
 import {
   BudgetResponse,
@@ -11,11 +6,16 @@ import {
   CreateBudgetDto,
   UpdateBudgetDto,
 } from '@finance-tracker/shared';
+import { CategoryAccessService } from '../category/category-access.service';
+import { assertOwnership } from '../common/assert-ownership';
 import { BudgetRepo } from './budget.repo';
 
 @Injectable()
 export class BudgetService {
-  constructor(private readonly budgetRepo: BudgetRepo) {}
+  constructor(
+    private readonly budgetRepo: BudgetRepo,
+    private readonly categoryAccess: CategoryAccessService,
+  ) {}
 
   private toResponse(budget: Budget): BudgetResponse {
     return {
@@ -30,11 +30,7 @@ export class BudgetService {
   }
 
   async create(userId: string, dto: CreateBudgetDto): Promise<BudgetResponse> {
-    const category = await this.budgetRepo.findCategoryForValidation(dto.categoryId);
-    if (!category) throw new NotFoundException('Category not found');
-    if (category.userId !== null && category.userId !== userId) {
-      throw new ForbiddenException('Category not accessible');
-    }
+    await this.categoryAccess.ensureAccess(dto.categoryId, userId);
 
     const existing = await this.budgetRepo.findByConstraint(
       userId,
@@ -98,8 +94,7 @@ export class BudgetService {
 
   async update(userId: string, id: string, dto: UpdateBudgetDto): Promise<BudgetResponse> {
     const budget = await this.budgetRepo.findById(id);
-    if (!budget) throw new NotFoundException();
-    if (budget.userId !== userId) throw new ForbiddenException();
+    assertOwnership(budget, userId, 'Budget');
 
     const updated = await this.budgetRepo.update(id, dto.amount ?? budget.amount.toNumber());
     return this.toResponse(updated);
@@ -107,8 +102,7 @@ export class BudgetService {
 
   async delete(userId: string, id: string): Promise<void> {
     const budget = await this.budgetRepo.findById(id);
-    if (!budget) throw new NotFoundException();
-    if (budget.userId !== userId) throw new ForbiddenException();
+    assertOwnership(budget, userId, 'Budget');
     await this.budgetRepo.delete(id);
   }
 }

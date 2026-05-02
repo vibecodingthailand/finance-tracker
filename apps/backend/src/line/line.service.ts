@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Category } from '@finance-tracker/database';
-import { CategoryResponse, TransactionType } from '@finance-tracker/shared';
 import { messagingApi, webhook } from '@line/bot-sdk';
+import { toCategoryResponse } from '../category/category.mapper';
 import { CategoryRepo } from '../category/category.repo';
 import { LinkRepo } from '../link/link.repo';
 import { AutoCategorizerService } from './categorizer/auto-categorizer.service';
@@ -81,7 +80,7 @@ export class LineService {
       const category = await this.categorizer.categorize(
         parsed.description,
         parsed.type,
-        cats.map((c) => this.toResponse(c)),
+        cats.map(toCategoryResponse),
       );
       await this.lineRepo.createTransaction({
         amount: parsed.amount,
@@ -118,17 +117,6 @@ export class LineService {
     }
 
     return 'วิธีใช้:\n• บันทึก: กาแฟ 65\n• สรุป - ยอดวันนี้\n• เดือนนี้ - ยอดเดือนนี้\n• ยกเลิก - ลบรายการล่าสุด';
-  }
-
-  private toResponse(c: Category): CategoryResponse {
-    return {
-      id: c.id,
-      name: c.name,
-      icon: c.icon,
-      type: c.type as TransactionType,
-      userId: c.userId,
-      createdAt: c.createdAt,
-    };
   }
 
   private formatAmount(n: number): string {

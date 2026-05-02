@@ -5,12 +5,14 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { TransactionType } from '@finance-tracker/shared';
+import { CategoryAccessService } from '../category/category-access.service';
 import { TransactionRepo } from './transaction.repo';
 import { TransactionService } from './transaction.service';
 
 describe('TransactionService', () => {
   let service: TransactionService;
   let repo: jest.Mocked<TransactionRepo>;
+  let categoryAccess: jest.Mocked<CategoryAccessService>;
 
   const userId = 'user1';
   const makeTransaction = (overrides: Record<string, unknown> = {}) => ({
@@ -26,13 +28,6 @@ describe('TransactionService', () => {
     ...overrides,
   });
 
-  const makeCategory = (overrides: Record<string, unknown> = {}) => ({
-    id: 'cat1',
-    type: TransactionType.EXPENSE,
-    userId: null,
-    ...overrides,
-  });
-
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
@@ -43,58 +38,55 @@ describe('TransactionService', () => {
             findAll: jest.fn(),
             findForSummary: jest.fn(),
             findById: jest.fn(),
-            findCategoryForValidation: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
           },
+        },
+        {
+          provide: CategoryAccessService,
+          useValue: { ensureAccess: jest.fn() },
         },
       ],
     }).compile();
 
     service = module.get(TransactionService);
     repo = module.get(TransactionRepo);
+    categoryAccess = module.get(CategoryAccessService);
   });
 
   describe('create', () => {
     it('throws NotFoundException when category not found', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(null);
+      categoryAccess.ensureAccess.mockRejectedValue(new NotFoundException());
       await expect(
         service.create(userId, { amount: 100, type: TransactionType.EXPENSE, categoryId: 'cat1' }),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('throws ForbiddenException when category belongs to another user', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(makeCategory({ userId: 'other' }) as never);
+      categoryAccess.ensureAccess.mockRejectedValue(new ForbiddenException());
       await expect(
         service.create(userId, { amount: 100, type: TransactionType.EXPENSE, categoryId: 'cat1' }),
       ).rejects.toThrow(ForbiddenException);
     });
 
     it('throws BadRequestException when category type mismatches', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(makeCategory({ type: TransactionType.INCOME }) as never);
+      categoryAccess.ensureAccess.mockRejectedValue(new BadRequestException());
       await expect(
         service.create(userId, { amount: 100, type: TransactionType.EXPENSE, categoryId: 'cat1' }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('creates and returns transaction for seed category', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(makeCategory() as never);
+    it('creates and returns transaction', async () => {
+      categoryAccess.ensureAccess.mockResolvedValue();
       repo.create.mockResolvedValue(makeTransaction() as never);
       const result = await service.create(userId, {
         amount: 100,
         type: TransactionType.EXPENSE,
         categoryId: 'cat1',
       });
+      expect(categoryAccess.ensureAccess).toHaveBeenCalledWith('cat1', userId, TransactionType.EXPENSE);
       expect(result).toMatchObject({ id: 'tx1', amount: 100, type: TransactionType.EXPENSE });
-    });
-
-    it('creates for user-owned category', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(makeCategory({ userId }) as never);
-      repo.create.mockResolvedValue(makeTransaction() as never);
-      await expect(
-        service.create(userId, { amount: 50, type: TransactionType.EXPENSE, categoryId: 'cat1' }),
-      ).resolves.toMatchObject({ id: 'tx1' });
     });
   });
 
@@ -184,19 +176,15 @@ describe('TransactionService', () => {
 
     it('validates new category when categoryId changes', async () => {
       repo.findById.mockResolvedValue(makeTransaction() as never);
-      repo.findCategoryForValidation.mockResolvedValue(
-        makeCategory({ type: TransactionType.INCOME }) as never,
-      );
+      categoryAccess.ensureAccess.mockRejectedValue(new BadRequestException());
       await expect(
         service.update(userId, 'tx1', { categoryId: 'cat2' }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('throws ForbiddenException when updating with another user\'s category', async () => {
+    it("throws ForbiddenException when updating with another user's category", async () => {
       repo.findById.mockResolvedValue(makeTransaction() as never);
-      repo.findCategoryForValidation.mockResolvedValue(
-        makeCategory({ id: 'cat2', type: TransactionType.EXPENSE, userId: 'other-user' }) as never,
-      );
+      categoryAccess.ensureAccess.mockRejectedValue(new ForbiddenException());
       await expect(
         service.update(userId, 'tx1', { categoryId: 'cat2' }),
       ).rejects.toThrow(ForbiddenException);

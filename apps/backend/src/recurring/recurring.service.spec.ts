@@ -1,12 +1,14 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { TransactionType } from '@finance-tracker/shared';
+import { CategoryAccessService } from '../category/category-access.service';
 import { RecurringRepo } from './recurring.repo';
 import { RecurringService } from './recurring.service';
 
 describe('RecurringService', () => {
   let service: RecurringService;
   let repo: jest.Mocked<RecurringRepo>;
+  let categoryAccess: jest.Mocked<CategoryAccessService>;
 
   const userId = 'user1';
   const makeRecurring = (overrides: Record<string, unknown> = {}) => ({
@@ -34,18 +36,22 @@ describe('RecurringService', () => {
             findAll: jest.fn(),
             findById: jest.fn(),
             findActiveByDayOfMonth: jest.fn(),
-            findCategoryForValidation: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
             createTransaction: jest.fn(),
           },
         },
+        {
+          provide: CategoryAccessService,
+          useValue: { ensureAccess: jest.fn() },
+        },
       ],
     }).compile();
 
     service = module.get(RecurringService);
     repo = module.get(RecurringRepo);
+    categoryAccess = module.get(CategoryAccessService);
   });
 
   describe('findAll', () => {
@@ -67,36 +73,25 @@ describe('RecurringService', () => {
     };
 
     it('creates and returns a recurring', async () => {
-      repo.findCategoryForValidation.mockResolvedValue({
-        id: 'cat1',
-        type: TransactionType.EXPENSE,
-        userId: null,
-      });
+      categoryAccess.ensureAccess.mockResolvedValue();
       repo.create.mockResolvedValue(makeRecurring() as never);
       const result = await service.create(userId, dto);
+      expect(categoryAccess.ensureAccess).toHaveBeenCalledWith('cat1', userId, TransactionType.EXPENSE);
       expect(result).toMatchObject({ id: 'rec1', userId });
     });
 
     it('throws NotFoundException when category not found', async () => {
-      repo.findCategoryForValidation.mockResolvedValue(null);
+      categoryAccess.ensureAccess.mockRejectedValue(new NotFoundException());
       await expect(service.create(userId, dto)).rejects.toThrow(NotFoundException);
     });
 
     it("throws ForbiddenException when category belongs to another user", async () => {
-      repo.findCategoryForValidation.mockResolvedValue({
-        id: 'cat1',
-        type: TransactionType.EXPENSE,
-        userId: 'other',
-      });
+      categoryAccess.ensureAccess.mockRejectedValue(new ForbiddenException());
       await expect(service.create(userId, dto)).rejects.toThrow(ForbiddenException);
     });
 
     it('throws BadRequestException when category type mismatches', async () => {
-      repo.findCategoryForValidation.mockResolvedValue({
-        id: 'cat1',
-        type: TransactionType.INCOME,
-        userId: null,
-      });
+      categoryAccess.ensureAccess.mockRejectedValue(new BadRequestException());
       await expect(service.create(userId, dto)).rejects.toThrow(BadRequestException);
     });
   });
@@ -118,16 +113,12 @@ describe('RecurringService', () => {
       repo.update.mockResolvedValue(updated as never);
       const result = await service.update(userId, 'rec1', { active: false });
       expect(result.active).toBe(false);
-      expect(repo.findCategoryForValidation).not.toHaveBeenCalled();
+      expect(categoryAccess.ensureAccess).not.toHaveBeenCalled();
     });
 
     it("throws ForbiddenException when changing to another user's category", async () => {
       repo.findById.mockResolvedValue(makeRecurring() as never);
-      repo.findCategoryForValidation.mockResolvedValue({
-        id: 'cat2',
-        type: TransactionType.EXPENSE,
-        userId: 'other',
-      });
+      categoryAccess.ensureAccess.mockRejectedValue(new ForbiddenException());
       await expect(
         service.update(userId, 'rec1', { categoryId: 'cat2' }),
       ).rejects.toThrow(ForbiddenException);
@@ -135,11 +126,7 @@ describe('RecurringService', () => {
 
     it('throws BadRequestException when changing to category with mismatched type', async () => {
       repo.findById.mockResolvedValue(makeRecurring() as never);
-      repo.findCategoryForValidation.mockResolvedValue({
-        id: 'cat2',
-        type: TransactionType.INCOME,
-        userId: null,
-      });
+      categoryAccess.ensureAccess.mockRejectedValue(new BadRequestException());
       await expect(
         service.update(userId, 'rec1', { categoryId: 'cat2' }),
       ).rejects.toThrow(BadRequestException);

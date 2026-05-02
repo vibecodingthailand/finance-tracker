@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Transaction } from '@finance-tracker/database';
 import {
   CategoryBreakdown,
@@ -17,11 +12,17 @@ import {
   TransactionType,
   UpdateTransactionDto,
 } from '@finance-tracker/shared';
+import { CategoryAccessService } from '../category/category-access.service';
+import { assertOwnership } from '../common/assert-ownership';
+import { daysInMonth, formatLocalDate, monthRange } from '../common/date-range';
 import { TransactionRepo } from './transaction.repo';
 
 @Injectable()
 export class TransactionService {
-  constructor(private readonly transactionRepo: TransactionRepo) {}
+  constructor(
+    private readonly transactionRepo: TransactionRepo,
+    private readonly categoryAccess: CategoryAccessService,
+  ) {}
 
   private toResponse(t: Transaction): TransactionResponse {
     return {
@@ -35,23 +36,8 @@ export class TransactionService {
     };
   }
 
-  private async validateCategory(
-    categoryId: string,
-    type: TransactionType,
-    userId: string,
-  ): Promise<void> {
-    const category = await this.transactionRepo.findCategoryForValidation(categoryId);
-    if (!category) throw new NotFoundException('Category not found');
-    if (category.userId !== null && category.userId !== userId) {
-      throw new ForbiddenException('Category not accessible');
-    }
-    if (category.type !== type) {
-      throw new BadRequestException('Category type does not match transaction type');
-    }
-  }
-
   async create(userId: string, dto: CreateTransactionDto): Promise<TransactionResponse> {
-    await this.validateCategory(dto.categoryId, dto.type, userId);
+    await this.categoryAccess.ensureAccess(dto.categoryId, userId, dto.type);
     const transaction = await this.transactionRepo.create({
       amount: dto.amount,
       type: dto.type,
@@ -84,11 +70,9 @@ export class TransactionService {
     const now = new Date();
     const month = query.month ?? now.getMonth() + 1;
     const year = query.year ?? now.getFullYear();
+    const { start, end } = monthRange(month, year);
 
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-
-    const transactions = await this.transactionRepo.findForSummary(userId, startDate, endDate);
+    const transactions = await this.transactionRepo.findForSummary(userId, start, end);
 
     let totalIncome = 0;
     let totalExpense = 0;
@@ -98,7 +82,7 @@ export class TransactionService {
 
     for (const t of transactions) {
       const amount = t.amount.toNumber();
-      const date = `${String(year)}-${String(month).padStart(2, '0')}-${String(t.createdAt.getDate()).padStart(2, '0')}`;
+      const date = formatLocalDate(t.createdAt);
 
       const daily = dailyMap.get(date) ?? { income: 0, expense: 0 };
       const catMap = t.type === 'INCOME' ? incomeByCat : expenseByCat;
@@ -123,23 +107,9 @@ export class TransactionService {
       dailyMap.set(date, daily);
     }
 
-    const toBreakdown = (
-      map: Map<string, { name: string; icon: string; total: number }>,
-      grandTotal: number,
-    ): CategoryBreakdown[] =>
-      Array.from(map.values())
-        .map((c) => ({
-          name: c.name,
-          icon: c.icon,
-          total: c.total,
-          percentage: grandTotal > 0 ? Math.round((c.total / grandTotal) * 1000) / 10 : 0,
-        }))
-        .sort((a, b) => b.total - a.total);
-
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const dailyTotals: DailyTotal[] = Array.from({ length: daysInMonth }, (_, i) => {
-      const day = i + 1;
-      const date = `${String(year)}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const days = daysInMonth(month, year);
+    const dailyTotals: DailyTotal[] = Array.from({ length: days }, (_, i) => {
+      const date = formatLocalDate(new Date(year, month - 1, i + 1));
       const totals = dailyMap.get(date) ?? { income: 0, expense: 0 };
       return { date, income: totals.income, expense: totals.expense };
     });
@@ -148,21 +118,34 @@ export class TransactionService {
       totalIncome,
       totalExpense,
       balance: totalIncome - totalExpense,
-      byCategoryExpense: toBreakdown(expenseByCat, totalExpense),
-      byCategoryIncome: toBreakdown(incomeByCat, totalIncome),
+      byCategoryExpense: this.toBreakdown(expenseByCat, totalExpense),
+      byCategoryIncome: this.toBreakdown(incomeByCat, totalIncome),
       dailyTotals,
     };
   }
 
+  private toBreakdown(
+    map: Map<string, { name: string; icon: string; total: number }>,
+    grandTotal: number,
+  ): CategoryBreakdown[] {
+    return Array.from(map.values())
+      .map((c) => ({
+        name: c.name,
+        icon: c.icon,
+        total: c.total,
+        percentage: grandTotal > 0 ? Math.round((c.total / grandTotal) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }
+
   async update(userId: string, id: string, dto: UpdateTransactionDto): Promise<TransactionResponse> {
     const transaction = await this.transactionRepo.findById(id);
-    if (!transaction) throw new NotFoundException();
-    if (transaction.userId !== userId) throw new ForbiddenException();
+    assertOwnership(transaction, userId, 'Transaction');
 
     if (dto.categoryId !== undefined || dto.type !== undefined) {
       const newCategoryId = dto.categoryId ?? transaction.categoryId;
       const newType = (dto.type ?? transaction.type) as TransactionType;
-      await this.validateCategory(newCategoryId, newType, userId);
+      await this.categoryAccess.ensureAccess(newCategoryId, userId, newType);
     }
 
     const updated = await this.transactionRepo.update(id, {
@@ -176,8 +159,7 @@ export class TransactionService {
 
   async delete(userId: string, id: string): Promise<void> {
     const transaction = await this.transactionRepo.findById(id);
-    if (!transaction) throw new NotFoundException();
-    if (transaction.userId !== userId) throw new ForbiddenException();
+    assertOwnership(transaction, userId, 'Transaction');
     await this.transactionRepo.delete(id);
   }
 }

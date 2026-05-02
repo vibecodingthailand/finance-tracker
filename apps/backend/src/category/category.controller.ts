@@ -8,16 +8,12 @@ import {
   Patch,
   Post,
   Query,
-  Request,
   UseGuards,
 } from '@nestjs/common';
 import { CreateCategoryDto, GetCategoriesQueryDto, UpdateCategoryDto } from '@finance-tracker/shared';
+import { AuthUser, CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CategoryService } from './category.service';
-
-interface AuthRequest {
-  user: { userId: string; email: string };
-}
 
 @UseGuards(JwtAuthGuard)
 @Controller('categories')
@@ -25,23 +21,23 @@ export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Get()
-  findAll(@Request() req: AuthRequest, @Query() query: GetCategoriesQueryDto) {
-    return this.categoryService.findAll(req.user.userId, query);
+  findAll(@CurrentUser() user: AuthUser, @Query() query: GetCategoriesQueryDto) {
+    return this.categoryService.findAll(user.userId, query);
   }
 
   @Post()
-  create(@Request() req: AuthRequest, @Body() dto: CreateCategoryDto) {
-    return this.categoryService.create(req.user.userId, dto);
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateCategoryDto) {
+    return this.categoryService.create(user.userId, dto);
   }
 
   @Patch(':id')
-  update(@Request() req: AuthRequest, @Param('id') id: string, @Body() dto: UpdateCategoryDto) {
-    return this.categoryService.update(req.user.userId, id, dto);
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateCategoryDto) {
+    return this.categoryService.update(user.userId, id, dto);
   }
 
   @HttpCode(204)
   @Delete(':id')
-  delete(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.categoryService.delete(req.user.userId, id);
+  delete(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.categoryService.delete(user.userId, id);
   }
 }
