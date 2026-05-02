@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { LinkCodeResponse } from '@finance-tracker/shared';
+import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { useToast } from '../components/ui/Toast';
 import { ApiError, apiFetch } from '../lib/api';
 
 function formatCountdown(secs: number): string {
@@ -11,6 +13,7 @@ function formatCountdown(secs: number): string {
 }
 
 export function Settings() {
+  const toast = useToast();
   const [code, setCode] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -30,6 +33,7 @@ export function Settings() {
       setCode(data.code);
       const secs = Math.max(0, Math.floor((new Date(data.expiresAt).getTime() - Date.now()) / 1000));
       setSecondsLeft(secs);
+      toast.success('สร้าง code แล้ว');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่');
     } finally {
@@ -40,8 +44,8 @@ export function Settings() {
   const expired = code !== null && secondsLeft <= 0;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
-      <h1 className="font-heading text-2xl font-bold text-zinc-100">ตั้งค่า</h1>
+    <div className="mx-auto max-w-lg space-y-6 animate-[fadeIn_300ms_ease-out]">
+      <PageHeader title="ตั้งค่า" subtitle="จัดการบัญชีและการเชื่อมต่อ" />
 
       <Card className="p-6">
         <h2 className="mb-1 font-heading text-lg font-semibold text-zinc-100">เชื่อม LINE</h2>

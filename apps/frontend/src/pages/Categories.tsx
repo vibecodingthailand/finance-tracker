@@ -3,15 +3,21 @@ import {
   TransactionType,
   type CategoryResponse,
 } from '@finance-tracker/shared';
+import { PencilIcon, TrashIcon } from '../components/icons';
 import {
   CategoryFormModal,
   type CategoryFormPayload,
 } from '../components/CategoryFormModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { LoadingState } from '../components/LoadingState';
+import { PageHeader } from '../components/PageHeader';
 import { PlusIcon } from '../components/icons';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { IconButton } from '../components/ui/IconButton';
+import { useToast } from '../components/ui/Toast';
 import { ApiError, apiFetch } from '../lib/api';
 
 type ModalState =
@@ -20,6 +26,7 @@ type ModalState =
   | { kind: 'edit'; category: CategoryResponse };
 
 export function Categories() {
+  const toast = useToast();
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,16 +75,18 @@ export function Categories() {
           method: 'PATCH',
           body: { name: payload.name, icon: payload.icon },
         });
+        toast.success('แก้ไขหมวดหมู่แล้ว');
       } else {
         await apiFetch<CategoryResponse>('/api/categories', {
           method: 'POST',
           body: payload,
         });
+        toast.success('เพิ่มหมวดหมู่แล้ว');
       }
       setModal({ kind: 'closed' });
       setRefreshKey((value) => value + 1);
     },
-    [],
+    [toast],
   );
 
   const handleConfirmDelete = useCallback(async () => {
@@ -88,6 +97,7 @@ export function Categories() {
       await apiFetch<void>(`/api/categories/${pendingDelete.id}`, { method: 'DELETE' });
       setPendingDelete(null);
       setRefreshKey((value) => value + 1);
+      toast.success('ลบหมวดหมู่แล้ว');
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setDeleteError('มี transaction ใช้หมวดนี้อยู่ ย้าย transaction ไปหมวดอื่นก่อน');
@@ -99,7 +109,7 @@ export function Categories() {
     } finally {
       setDeleting(false);
     }
-  }, [pendingDelete]);
+  }, [pendingDelete, toast]);
 
   const closeDeleteDialog = useCallback(() => {
     setPendingDelete(null);
@@ -112,33 +122,24 @@ export function Categories() {
 
   return (
     <div className="flex flex-col gap-6 animate-[fadeIn_300ms_ease-out]">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-zinc-100 sm:text-3xl">หมวดหมู่</h1>
-          <p className="text-sm text-zinc-400">
-            จัดการหมวดหมู่ของรายรับและรายจ่าย หมวดเริ่มต้นแก้ไขไม่ได้
-          </p>
-        </div>
-        <Button
-          onClick={() => setModal({ kind: 'create', type: TransactionType.EXPENSE })}
-          className="gap-2 sm:min-w-40"
-        >
-          <PlusIcon className="h-4 w-4" />
-          เพิ่มหมวดใหม่
-        </Button>
-      </header>
+      <PageHeader
+        title="หมวดหมู่"
+        subtitle="จัดการหมวดหมู่ของรายรับและรายจ่าย หมวดเริ่มต้นแก้ไขไม่ได้"
+        action={
+          <Button
+            onClick={() => setModal({ kind: 'create', type: TransactionType.EXPENSE })}
+            className="gap-2 sm:min-w-40"
+          >
+            <PlusIcon className="h-4 w-4" />
+            เพิ่มหมวดใหม่
+          </Button>
+        }
+      />
 
-      {error ? (
-        <Card className="px-5 py-4 text-sm text-rose-300">
-          <p className="font-medium">{error}</p>
-          <p className="mt-1 text-xs text-rose-300/70">กรุณาลองใหม่อีกครั้ง</p>
-        </Card>
-      ) : null}
+      {error ? <ErrorState message={error} /> : null}
 
       {loading ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-5 py-12 text-center text-sm text-zinc-500">
-          กำลังโหลด...
-        </div>
+        <LoadingState variant="grid" rows={6} />
       ) : (
         <div className="flex flex-col gap-8">
           <CategorySection
@@ -241,7 +242,7 @@ interface CategoryCardProps {
 function CategoryCard({ category, onEdit, onDelete }: CategoryCardProps) {
   const isDefault = category.userId === null;
   return (
-    <li className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 shadow-lg">
+    <li className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 shadow-lg transition hover:border-zinc-700">
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xl">
           {category.icon}
@@ -249,25 +250,25 @@ function CategoryCard({ category, onEdit, onDelete }: CategoryCardProps) {
         <p className="truncate text-sm font-medium text-zinc-100">{category.name}</p>
       </div>
       {isDefault ? (
-        <span className="shrink-0 rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-0.5 text-xs font-medium text-zinc-300">
-          Default
-        </span>
+        <Badge tone="neutral">เริ่มต้น</Badge>
       ) : (
-        <div className="flex shrink-0 gap-3">
-          <button
-            type="button"
-            className="text-sm font-medium text-emerald-400 transition hover:text-emerald-300"
+        <div className="flex shrink-0 gap-1">
+          <IconButton
+            size="sm"
+            tone="accent"
+            label={`แก้ไข ${category.name}`}
             onClick={() => onEdit(category)}
           >
-            แก้ไข
-          </button>
-          <button
-            type="button"
-            className="text-sm font-medium text-rose-400 transition hover:text-rose-300"
+            <PencilIcon className="h-4 w-4" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            tone="danger"
+            label={`ลบ ${category.name}`}
             onClick={() => onDelete(category)}
           >
-            ลบ
-          </button>
+            <TrashIcon className="h-4 w-4" />
+          </IconButton>
         </div>
       )}
     </li>

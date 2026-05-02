@@ -7,6 +7,9 @@ import type {
 } from '@finance-tracker/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { LoadingState } from '../components/LoadingState';
+import { PageHeader } from '../components/PageHeader';
 import { Pagination } from '../components/Pagination';
 import { TransactionFilters, type TransactionFiltersValue } from '../components/TransactionFilters';
 import { TransactionFormModal } from '../components/TransactionFormModal';
@@ -14,6 +17,7 @@ import { TransactionsTable } from '../components/TransactionsTable';
 import { PlusIcon } from '../components/icons';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { useToast } from '../components/ui/Toast';
 import { ApiError, apiFetch } from '../lib/api';
 
 const PAGE_SIZE = 20;
@@ -28,6 +32,7 @@ const INITIAL_FILTERS: TransactionFiltersValue = {
 type ModalMode = 'closed' | 'create' | { kind: 'edit'; transaction: TransactionResponse };
 
 export function Transactions() {
+  const toast = useToast();
   const [filters, setFilters] = useState<TransactionFiltersValue>(INITIAL_FILTERS);
   const [page, setPage] = useState(1);
 
@@ -104,16 +109,18 @@ export function Transactions() {
           method: 'PATCH',
           body: payload,
         });
+        toast.success('บันทึกการแก้ไขแล้ว');
       } else {
         await apiFetch<TransactionResponse>('/api/transactions', {
           method: 'POST',
           body: payload,
         });
+        toast.success('เพิ่มรายการแล้ว');
       }
       setModal('closed');
       setRefreshKey((value) => value + 1);
     },
-    [],
+    [toast],
   );
 
   const handleConfirmDelete = useCallback(async () => {
@@ -123,13 +130,14 @@ export function Transactions() {
       await apiFetch<void>(`/api/transactions/${pendingDelete.id}`, { method: 'DELETE' });
       setPendingDelete(null);
       setRefreshKey((value) => value + 1);
+      toast.success('ลบรายการแล้ว');
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'ลบรายการไม่สำเร็จ';
       setError(message);
     } finally {
       setDeleting(false);
     }
-  }, [pendingDelete]);
+  }, [pendingDelete, toast]);
 
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -143,16 +151,16 @@ export function Transactions() {
 
   return (
     <div className="flex flex-col gap-6 animate-[fadeIn_300ms_ease-out]">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-zinc-100 sm:text-3xl">รายการ</h1>
-          <p className="text-sm text-zinc-400">จัดการรายรับรายจ่ายทั้งหมดของคุณ</p>
-        </div>
-        <Button onClick={() => setModal('create')} className="gap-2 sm:min-w-40">
-          <PlusIcon className="h-4 w-4" />
-          เพิ่มรายการ
-        </Button>
-      </header>
+      <PageHeader
+        title="รายการ"
+        subtitle="จัดการรายรับรายจ่ายทั้งหมดของคุณ"
+        action={
+          <Button onClick={() => setModal('create')} className="gap-2 sm:min-w-40">
+            <PlusIcon className="h-4 w-4" />
+            เพิ่มรายการ
+          </Button>
+        }
+      />
 
       <Card className="px-5 py-4">
         <TransactionFilters
@@ -163,17 +171,10 @@ export function Transactions() {
         />
       </Card>
 
-      {error ? (
-        <Card className="px-5 py-4 text-sm text-rose-300">
-          <p className="font-medium">{error}</p>
-          <p className="mt-1 text-xs text-rose-300/70">กรุณาลองใหม่อีกครั้ง</p>
-        </Card>
-      ) : null}
+      {error ? <ErrorState message={error} /> : null}
 
       {loading ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-5 py-12 text-center text-sm text-zinc-500">
-          กำลังโหลด...
-        </div>
+        <LoadingState variant="table" rows={6} />
       ) : isEmpty ? (
         <EmptyState
           title="ยังไม่มีรายการ"

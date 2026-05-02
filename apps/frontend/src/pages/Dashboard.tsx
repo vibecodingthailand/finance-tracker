@@ -6,11 +6,14 @@ import type {
 } from '@finance-tracker/shared';
 import { CategoryPieChart } from '../components/CategoryPieChart';
 import { DailyBarChart } from '../components/DailyBarChart';
+import { ErrorState } from '../components/ErrorState';
+import { LoadingState } from '../components/LoadingState';
 import { MonthPicker } from '../components/MonthPicker';
+import { PageHeader } from '../components/PageHeader';
 import { RecentTransactionsCard } from '../components/RecentTransactionsCard';
 import { SummaryCard } from '../components/SummaryCard';
 import { TrendingDownIcon, TrendingUpIcon, WalletIcon } from '../components/icons';
-import { Card } from '../components/ui/Card';
+import { Skeleton } from '../components/ui/Skeleton';
 import { ApiError, apiFetch } from '../lib/api';
 import { THAI_MONTH_NAMES } from '../lib/format';
 
@@ -84,15 +87,11 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6 animate-[fadeIn_300ms_ease-out]">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-zinc-100 sm:text-3xl">ภาพรวม</h1>
-          <p className="text-sm text-zinc-400">
-            สรุปประจำเดือน {THAI_MONTH_NAMES[month - 1]} {year}
-          </p>
-        </div>
-        <MonthPicker month={month} year={year} onChange={handleMonthChange} />
-      </header>
+      <PageHeader
+        title="ภาพรวม"
+        subtitle={`สรุปประจำเดือน ${THAI_MONTH_NAMES[month - 1]} ${year}`}
+        action={<MonthPicker month={month} year={year} onChange={handleMonthChange} />}
+      />
 
       <SummarySection summary={summary} loading={summaryLoading} error={summaryError} />
 
@@ -116,16 +115,10 @@ interface SummarySectionProps {
 
 function SummarySection({ summary, loading, error }: SummarySectionProps) {
   if (loading || !summary) {
-    return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <SkeletonBlock className="h-24" />
-        <SkeletonBlock className="h-24" />
-        <SkeletonBlock className="h-24" />
-      </div>
-    );
+    return <LoadingState variant="cards" />;
   }
   if (error) {
-    return <ErrorCard message={error} />;
+    return <ErrorState message={error} />;
   }
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -161,9 +154,9 @@ function ChartsSection({ summary, loading, error }: ChartsSectionProps) {
   if (loading || !summary) {
     return (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <SkeletonBlock className="h-80" />
-        <SkeletonBlock className="h-80" />
-        <SkeletonBlock className="h-80 md:col-span-2 lg:col-span-1" />
+        <Skeleton className="h-80" />
+        <Skeleton className="h-80" />
+        <Skeleton className="h-80 md:col-span-2 lg:col-span-1" />
       </div>
     );
   }
@@ -188,27 +181,10 @@ interface RecentSectionProps {
 
 function RecentSection({ transactions, categories, loading, error }: RecentSectionProps) {
   if (loading) {
-    return <SkeletonBlock className="h-64" />;
+    return <Skeleton className="h-64" />;
   }
   if (error) {
-    return <ErrorCard message={error} />;
+    return <ErrorState message={error} />;
   }
   return <RecentTransactionsCard transactions={transactions} categories={categories} />;
-}
-
-function SkeletonBlock({ className = '' }: { className?: string }) {
-  return (
-    <div
-      className={`animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/60 ${className}`}
-    />
-  );
-}
-
-function ErrorCard({ message }: { message: string }) {
-  return (
-    <Card className="px-5 py-4 text-sm text-rose-300">
-      <p className="font-medium">{message}</p>
-      <p className="mt-1 text-xs text-rose-300/70">กรุณาลองใหม่อีกครั้ง</p>
-    </Card>
-  );
 }

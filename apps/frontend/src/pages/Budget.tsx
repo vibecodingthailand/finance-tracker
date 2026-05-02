@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BudgetStatusItem, BudgetStatusResponse, CategoryResponse } from '@finance-tracker/shared';
 import { TransactionType } from '@finance-tracker/shared';
 import { BudgetFormModal } from '../components/BudgetFormModal';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { LoadingState } from '../components/LoadingState';
+import { PageHeader } from '../components/PageHeader';
 import { PencilIcon, PlusIcon } from '../components/icons';
 import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { IconButton } from '../components/ui/IconButton';
 import { ApiError, apiFetch } from '../lib/api';
 import { formatCurrency, THAI_MONTH_NAMES } from '../lib/format';
 
@@ -126,29 +130,20 @@ export function Budget() {
 
   return (
     <div className="flex flex-col gap-6 animate-[fadeIn_300ms_ease-out]">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-heading text-2xl font-bold text-zinc-100 sm:text-3xl">งบประมาณ</h1>
-        <p className="text-sm text-zinc-400">
-          {THAI_MONTH_NAMES[month - 1]} {year}
-        </p>
-      </header>
+      <PageHeader
+        title="งบประมาณ"
+        subtitle={`${THAI_MONTH_NAMES[month - 1]} ${year}`}
+      />
 
-      {error ? (
-        <Card className="px-5 py-4 text-sm text-rose-300">
-          <p className="font-medium">{error}</p>
-          <p className="mt-1 text-xs text-rose-300/70">กรุณาลองใหม่อีกครั้ง</p>
-        </Card>
-      ) : null}
+      {error ? <ErrorState message={error} /> : null}
 
       {loading ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-5 py-12 text-center text-sm text-zinc-500">
-          กำลังโหลด...
-        </div>
+        <LoadingState variant="list" rows={4} />
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-900/40 px-4 py-10 text-center">
-          <p className="font-heading text-base font-semibold text-zinc-200">ยังไม่มีหมวดหมู่รายจ่าย</p>
-          <p className="mt-1 text-sm text-zinc-500">เพิ่มหมวดหมู่รายจ่ายก่อนเพื่อตั้งงบประมาณ</p>
-        </div>
+        <EmptyState
+          title="ยังไม่มีหมวดหมู่รายจ่าย"
+          description="เพิ่มหมวดหมู่รายจ่ายก่อนเพื่อตั้งงบประมาณ"
+        />
       ) : (
         <ul className="flex flex-col gap-3">
           {rows.map((row) => (
@@ -228,14 +223,9 @@ function BudgetItemRow({ row, onSet, onEdit }: BudgetItemRowProps) {
                   / {formatCurrency(row.budgetAmount)}
                 </p>
               </div>
-              <button
-                type="button"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800 hover:text-emerald-400"
-                onClick={onEdit}
-                aria-label={`แก้ไขงบ ${row.categoryName}`}
-              >
+              <IconButton tone="accent" label={`แก้ไขงบ ${row.categoryName}`} onClick={onEdit}>
                 <PencilIcon className="h-4 w-4" />
-              </button>
+              </IconButton>
             </>
           ) : (
             <Button onClick={onSet} className="gap-1.5 px-3 text-xs">

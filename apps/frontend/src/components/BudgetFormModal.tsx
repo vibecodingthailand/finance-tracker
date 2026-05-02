@@ -3,6 +3,7 @@ import { UpdateBudgetDto } from '@finance-tracker/shared';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { useToast } from './ui/Toast';
 import { ApiError, apiFetch } from '../lib/api';
 import { validateDto, type FieldErrors } from '../lib/validate-dto';
 
@@ -29,6 +30,7 @@ export function BudgetFormModal({
   currentAmount,
   budgetId,
 }: BudgetFormModalProps) {
+  const toast = useToast();
   const isEdit = currentAmount !== undefined;
   const [amount, setAmount] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors<UpdateBudgetDto>>({});
@@ -63,11 +65,13 @@ export function BudgetFormModal({
           method: 'PATCH',
           body: { amount: parsedAmount },
         });
+        toast.success('แก้ไขงบประมาณแล้ว');
       } else {
         await apiFetch<void>('/api/budgets', {
           method: 'POST',
           body: { amount: parsedAmount, categoryId, month, year },
         });
+        toast.success('ตั้งงบประมาณแล้ว');
       }
       onSuccess();
     } catch (err) {
@@ -75,7 +79,7 @@ export function BudgetFormModal({
     } finally {
       setSubmitting(false);
     }
-  }, [amount, isEdit, budgetId, categoryId, month, year, onSuccess]);
+  }, [amount, isEdit, budgetId, categoryId, month, year, onSuccess, toast]);
 
   return (
     <Modal

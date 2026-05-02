@@ -1,5 +1,8 @@
 import type { CategoryResponse, TransactionResponse } from '@finance-tracker/shared';
 import { TransactionType } from '@finance-tracker/shared';
+import { Badge } from './ui/Badge';
+import { IconButton } from './ui/IconButton';
+import { PencilIcon, TrashIcon } from './icons';
 import { formatCurrency, formatDate } from '../lib/format';
 
 interface TransactionsTableProps {
@@ -17,25 +20,25 @@ export function TransactionsTable({
 }: TransactionsTableProps) {
   return (
     <>
-      <div className="hidden overflow-hidden rounded-xl border border-zinc-800 sm:block">
+      <div className="hidden overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 shadow-lg sm:block">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-900/80 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          <thead className="bg-zinc-900/80 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
             <tr>
-              <th className="px-4 py-3">วันที่</th>
-              <th className="px-4 py-3">รายละเอียด</th>
-              <th className="px-4 py-3">หมวดหมู่</th>
-              <th className="px-4 py-3">ประเภท</th>
-              <th className="px-4 py-3 text-right">จำนวนเงิน</th>
-              <th className="px-4 py-3 text-right">จัดการ</th>
+              <th className="px-4 py-3 font-medium">วันที่</th>
+              <th className="px-4 py-3 font-medium">รายละเอียด</th>
+              <th className="px-4 py-3 font-medium">หมวดหมู่</th>
+              <th className="px-4 py-3 font-medium">ประเภท</th>
+              <th className="px-4 py-3 text-right font-medium">จำนวนเงิน</th>
+              <th className="px-4 py-3 text-right font-medium">จัดการ</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800 bg-zinc-900">
+          <tbody className="divide-y divide-zinc-800">
             {transactions.map((transaction) => {
               const category = categories.get(transaction.categoryId);
               const isIncome = transaction.type === TransactionType.INCOME;
               const description = transaction.description?.trim() || category?.name || 'ไม่ระบุ';
               return (
-                <tr key={transaction.id} className="text-zinc-100">
+                <tr key={transaction.id} className="text-zinc-100 transition hover:bg-zinc-800/30">
                   <td className="whitespace-nowrap px-4 py-3 text-zinc-400">
                     {formatDate(transaction.createdAt)}
                   </td>
@@ -49,10 +52,12 @@ export function TransactionsTable({
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <TypeBadge type={transaction.type} />
+                    <Badge tone={isIncome ? 'income' : 'expense'}>
+                      {isIncome ? 'รายรับ' : 'รายจ่าย'}
+                    </Badge>
                   </td>
                   <td
-                    className={`whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums ${
+                    className={`whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums ${
                       isIncome ? 'text-emerald-400' : 'text-rose-400'
                     }`}
                   >
@@ -60,21 +65,23 @@ export function TransactionsTable({
                     {formatCurrency(transaction.amount)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
-                    <div className="inline-flex gap-3">
-                      <button
-                        type="button"
-                        className="text-sm font-medium text-emerald-400 transition hover:text-emerald-300"
+                    <div className="inline-flex gap-1">
+                      <IconButton
+                        size="sm"
+                        tone="accent"
+                        label="แก้ไข"
                         onClick={() => onEdit(transaction)}
                       >
-                        แก้ไข
-                      </button>
-                      <button
-                        type="button"
-                        className="text-sm font-medium text-rose-400 transition hover:text-rose-300"
+                        <PencilIcon className="h-4 w-4" />
+                      </IconButton>
+                      <IconButton
+                        size="sm"
+                        tone="danger"
+                        label="ลบ"
                         onClick={() => onDelete(transaction)}
                       >
-                        ลบ
-                      </button>
+                        <TrashIcon className="h-4 w-4" />
+                      </IconButton>
                     </div>
                   </td>
                 </tr>
@@ -92,7 +99,7 @@ export function TransactionsTable({
           return (
             <li
               key={transaction.id}
-              className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3"
+              className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 shadow-lg"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
@@ -116,22 +123,26 @@ export function TransactionsTable({
                 </span>
               </div>
               <div className="mt-3 flex items-center justify-between">
-                <TypeBadge type={transaction.type} />
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    className="text-sm font-medium text-emerald-400 transition hover:text-emerald-300"
+                <Badge tone={isIncome ? 'income' : 'expense'}>
+                  {isIncome ? 'รายรับ' : 'รายจ่าย'}
+                </Badge>
+                <div className="flex gap-1">
+                  <IconButton
+                    size="sm"
+                    tone="accent"
+                    label="แก้ไข"
                     onClick={() => onEdit(transaction)}
                   >
-                    แก้ไข
-                  </button>
-                  <button
-                    type="button"
-                    className="text-sm font-medium text-rose-400 transition hover:text-rose-300"
+                    <PencilIcon className="h-4 w-4" />
+                  </IconButton>
+                  <IconButton
+                    size="sm"
+                    tone="danger"
+                    label="ลบ"
                     onClick={() => onDelete(transaction)}
                   >
-                    ลบ
-                  </button>
+                    <TrashIcon className="h-4 w-4" />
+                  </IconButton>
                 </div>
               </div>
             </li>
@@ -139,20 +150,5 @@ export function TransactionsTable({
         })}
       </ul>
     </>
-  );
-}
-
-function TypeBadge({ type }: { type: TransactionType }) {
-  if (type === TransactionType.INCOME) {
-    return (
-      <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
-        รายรับ
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-0.5 text-xs font-medium text-rose-300">
-      รายจ่าย
-    </span>
   );
 }

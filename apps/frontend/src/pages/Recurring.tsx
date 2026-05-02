@@ -8,12 +8,19 @@ import {
 } from '@finance-tracker/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { LoadingState } from '../components/LoadingState';
+import { PageHeader } from '../components/PageHeader';
+import { TypeToggle } from '../components/TypeToggle';
 import { PencilIcon, PlusIcon, TrashIcon } from '../components/icons';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { IconButton } from '../components/ui/IconButton';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Select, type SelectOption } from '../components/ui/Select';
+import { Switch } from '../components/ui/Switch';
+import { useToast } from '../components/ui/Toast';
 import { ApiError, apiFetch } from '../lib/api';
 
 type FormState = {
@@ -38,6 +45,7 @@ type ModalState =
   | { kind: 'edit'; recurring: RecurringResponse };
 
 export function Recurring() {
+  const toast = useToast();
   const [items, setItems] = useState<RecurringResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,43 +87,41 @@ export function Recurring() {
       await apiFetch<void>(`/api/recurring/${pendingDelete.id}`, { method: 'DELETE' });
       setPendingDelete(null);
       setRefreshKey((k) => k + 1);
+      toast.success('ลบรายการประจำแล้ว');
     } finally {
       setDeleting(false);
     }
-  }, [pendingDelete]);
+  }, [pendingDelete, toast]);
 
-  const handleToggleActive = useCallback(async (item: RecurringResponse) => {
-    await apiFetch<RecurringResponse>(`/api/recurring/${item.id}`, {
-      method: 'PATCH',
-      body: { active: !item.active } as UpdateRecurringDto,
-    });
-    setRefreshKey((k) => k + 1);
-  }, []);
+  const handleToggleActive = useCallback(
+    async (item: RecurringResponse) => {
+      await apiFetch<RecurringResponse>(`/api/recurring/${item.id}`, {
+        method: 'PATCH',
+        body: { active: !item.active } as UpdateRecurringDto,
+      });
+      setRefreshKey((k) => k + 1);
+      toast.info(item.active ? 'ปิดใช้งานรายการประจำแล้ว' : 'เปิดใช้งานรายการประจำแล้ว');
+    },
+    [toast],
+  );
 
   return (
     <div className="flex flex-col gap-6 animate-[fadeIn_300ms_ease-out]">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-zinc-100 sm:text-3xl">รายการประจำ</h1>
-          <p className="text-sm text-zinc-400">ระบบจะสร้างรายการให้อัตโนมัติตามวันที่กำหนด</p>
-        </div>
-        <Button onClick={() => setModal({ kind: 'create' })} className="gap-2 sm:min-w-40">
-          <PlusIcon className="h-4 w-4" />
-          เพิ่มรายการประจำ
-        </Button>
-      </header>
+      <PageHeader
+        title="รายการประจำ"
+        subtitle="ระบบจะสร้างรายการให้อัตโนมัติตามวันที่กำหนด"
+        action={
+          <Button onClick={() => setModal({ kind: 'create' })} className="gap-2 sm:min-w-40">
+            <PlusIcon className="h-4 w-4" />
+            เพิ่มรายการประจำ
+          </Button>
+        }
+      />
 
-      {error ? (
-        <Card className="px-5 py-4 text-sm text-rose-300">
-          <p className="font-medium">{error}</p>
-          <p className="mt-1 text-xs text-rose-300/70">กรุณาลองใหม่อีกครั้ง</p>
-        </Card>
-      ) : null}
+      {error ? <ErrorState message={error} /> : null}
 
       {loading ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-5 py-12 text-center text-sm text-zinc-500">
-          กำลังโหลด...
-        </div>
+        <LoadingState variant="list" rows={4} />
       ) : items.length === 0 ? (
         <EmptyState title="ยังไม่มีรายการประจำ" description="เพิ่มรายการประจำเพื่อให้ระบบสร้างอัตโนมัติ">
           <Button onClick={() => setModal({ kind: 'create' })} className="gap-2">
@@ -205,8 +211,6 @@ function RecurringRow({ item, onEdit, onDelete, onToggleActive }: RecurringRowPr
             <span className={amountClass}>{sign}฿{formatted}</span>
             <span>·</span>
             <span>วันที่ {item.dayOfMonth}</span>
-            <span>·</span>
-            <ActiveBadge active={item.active} />
           </p>
         </div>
       </div>
@@ -224,59 +228,25 @@ function RecurringRow({ item, onEdit, onDelete, onToggleActive }: RecurringRowPr
 
       <div className="flex items-center justify-between gap-2 sm:justify-end">
         <div className="sm:hidden">
-          <ActiveBadge active={item.active} />
+          <Badge tone={item.active ? 'income' : 'neutral'}>
+            {item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+          </Badge>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label={item.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
-            title={item.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
-            onClick={onToggleActive}
-            className={`flex h-7 w-12 shrink-0 items-center rounded-full border px-0.5 transition-colors ${
-              item.active
-                ? 'border-emerald-500/40 bg-emerald-500/15'
-                : 'border-zinc-700 bg-zinc-800'
-            }`}
-          >
-            <span
-              className={`h-5 w-5 rounded-full transition-transform duration-200 ${
-                item.active ? 'translate-x-5 bg-emerald-400' : 'translate-x-0 bg-zinc-500'
-              }`}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={onEdit}
-            aria-label="แก้ไข"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
-          >
+          <Switch
+            checked={item.active}
+            onChange={onToggleActive}
+            label={item.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
+          />
+          <IconButton size="sm" tone="accent" label="แก้ไข" onClick={onEdit}>
             <PencilIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            aria-label="ลบ"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800 hover:text-rose-400"
-          >
+          </IconButton>
+          <IconButton size="sm" tone="danger" label="ลบ" onClick={onDelete}>
             <TrashIcon className="h-4 w-4" />
-          </button>
+          </IconButton>
         </div>
       </div>
     </li>
-  );
-}
-
-function ActiveBadge({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-        active
-          ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
-          : 'bg-zinc-800 text-zinc-500 ring-1 ring-zinc-700'
-      }`}
-    >
-      {active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
-    </span>
   );
 }
 
@@ -295,6 +265,7 @@ function RecurringFormModal({
   onClose,
   onSaved,
 }: RecurringFormModalProps) {
+  const toast = useToast();
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -358,6 +329,7 @@ function RecurringFormModal({
           method: 'PATCH',
           body,
         });
+        toast.success('แก้ไขรายการประจำแล้ว');
       } else {
         const body: CreateRecurringDto = {
           amount,
@@ -367,6 +339,7 @@ function RecurringFormModal({
           dayOfMonth,
         };
         await apiFetch<RecurringResponse>('/api/recurring', { method: 'POST', body });
+        toast.success('เพิ่มรายการประจำแล้ว');
       }
       onSaved();
     } catch (err) {
@@ -383,30 +356,7 @@ function RecurringFormModal({
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => handleTypeChange(TransactionType.EXPENSE)}
-            className={`rounded-lg border py-2.5 text-sm font-medium transition ${
-              form.type === TransactionType.EXPENSE
-                ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
-                : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600'
-            }`}
-          >
-            รายจ่าย
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTypeChange(TransactionType.INCOME)}
-            className={`rounded-lg border py-2.5 text-sm font-medium transition ${
-              form.type === TransactionType.INCOME
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600'
-            }`}
-          >
-            รายรับ
-          </button>
-        </div>
+        <TypeToggle value={form.type} onChange={handleTypeChange} />
 
         <Input
           label="จำนวนเงิน (฿)"
