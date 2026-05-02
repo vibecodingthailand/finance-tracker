@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { BudgetModule } from './budget/budget.module';
 import { RecurringModule } from './recurring/recurring.module';
 import { TransactionModule } from './transaction/transaction.module';
+import { LineModule } from './line/line.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { TransactionModule } from './transaction/transaction.module';
     TransactionModule,
     RecurringModule,
     BudgetModule,
+    LineModule,
   ],
   controllers: [AppController],
   providers: [AppService],
