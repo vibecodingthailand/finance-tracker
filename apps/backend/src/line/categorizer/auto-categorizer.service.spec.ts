@@ -30,6 +30,8 @@ const INCOME_CATEGORIES: CategoryResponse[] = [
 
 const ALL_CATEGORIES = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
 
+const jsonResponse = (id: string) => ({ content: [{ type: 'text', text: `{"id":"${id}"}` }] });
+
 describe('AutoCategorizerService', () => {
   let service: AutoCategorizerService;
   let createSpy: jest.SpyInstance;
@@ -58,18 +60,14 @@ describe('AutoCategorizerService', () => {
 
   describe('successful categorization', () => {
     it('returns the category Haiku picked', async () => {
-      createSpy.mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'cat-food' }],
-      } as never);
+      createSpy.mockResolvedValueOnce(jsonResponse('cat-food') as never);
 
       const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
       expect(result.id).toBe('cat-food');
     });
 
     it('passes only categories matching the requested type to Haiku', async () => {
-      createSpy.mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'cat-food' }],
-      } as never);
+      createSpy.mockResolvedValueOnce(jsonResponse('cat-food') as never);
 
       await service.categorize('กาแฟ', TransactionType.EXPENSE, ALL_CATEGORIES);
 
@@ -79,9 +77,18 @@ describe('AutoCategorizerService', () => {
       expect(prompt).toContain('cat-food');
     });
 
-    it('strips whitespace from Haiku response before matching', async () => {
+    it('parses JSON response and extracts id', async () => {
       createSpy.mockResolvedValueOnce({
-        content: [{ type: 'text', text: '  cat-food  \n' }],
+        content: [{ type: 'text', text: '  {"id":"cat-food"}  \n' }],
+      } as never);
+
+      const result = await service.categorize('ข้าว', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
+      expect(result.id).toBe('cat-food');
+    });
+
+    it('handles markdown-wrapped JSON response', async () => {
+      createSpy.mockResolvedValueOnce({
+        content: [{ type: 'text', text: '```json\n{"id":"cat-food"}\n```' }],
       } as never);
 
       const result = await service.categorize('ข้าว', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
@@ -91,9 +98,7 @@ describe('AutoCategorizerService', () => {
 
   describe('caching', () => {
     it('returns cached result and does not call Haiku again', async () => {
-      createSpy.mockResolvedValue({
-        content: [{ type: 'text', text: 'cat-food' }],
-      } as never);
+      createSpy.mockResolvedValue(jsonResponse('cat-food') as never);
 
       await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
       await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
@@ -102,9 +107,7 @@ describe('AutoCategorizerService', () => {
     });
 
     it('treats description as case-insensitive for cache key', async () => {
-      createSpy.mockResolvedValue({
-        content: [{ type: 'text', text: 'cat-food' }],
-      } as never);
+      createSpy.mockResolvedValue(jsonResponse('cat-food') as never);
 
       await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
       await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
@@ -114,8 +117,8 @@ describe('AutoCategorizerService', () => {
 
     it('does not reuse cache across different types', async () => {
       createSpy
-        .mockResolvedValueOnce({ content: [{ type: 'text', text: 'cat-food' }] } as never)
-        .mockResolvedValueOnce({ content: [{ type: 'text', text: 'cat-salary' }] } as never);
+        .mockResolvedValueOnce(jsonResponse('cat-food') as never)
+        .mockResolvedValueOnce(jsonResponse('cat-salary') as never);
 
       await service.categorize('โบนัส', TransactionType.EXPENSE, ALL_CATEGORIES);
       await service.categorize('โบนัส', TransactionType.INCOME, ALL_CATEGORIES);
@@ -126,9 +129,7 @@ describe('AutoCategorizerService', () => {
 
   describe('fallback behaviour', () => {
     it('falls back to อื่นๆ when Haiku returns an unrecognised ID', async () => {
-      createSpy.mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'cat-does-not-exist' }],
-      } as never);
+      createSpy.mockResolvedValueOnce(jsonResponse('cat-does-not-exist') as never);
 
       const result = await service.categorize('กาแฟ', TransactionType.EXPENSE, EXPENSE_CATEGORIES);
       expect(result.id).toBe('cat-other');

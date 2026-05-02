@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CategoryResponse, TransactionType } from '@finance-tracker/shared';
 
 const SYSTEM_PROMPT =
-  'You are a financial transaction categorizer. Given a transaction description and a list of categories, reply with ONLY the category ID that best fits. No explanation, no extra text.';
+  'You are a financial transaction categorizer. Given a transaction description and a JSON array of categories, reply with ONLY a JSON object in the format {"id":"<category_id>"} that best fits. No explanation, no extra text, no markdown.';
 
 @Injectable()
 export class AutoCategorizerService {
@@ -46,10 +46,8 @@ export class AutoCategorizerService {
   }
 
   private async callHaiku(description: string, categories: CategoryResponse[]): Promise<string> {
-    const categoryList = categories.map((c) => `${c.id}: ${c.name}`).join('\n');
-
     const response = await this.anthropic.messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 64,
       system: [
         {
@@ -61,14 +59,18 @@ export class AutoCategorizerService {
       messages: [
         {
           role: 'user',
-          content: `Transaction: "${description}"\n\nCategories:\n${categoryList}`,
+          content: `Transaction: "${description}"\n\nCategories:\n${JSON.stringify(categories)}`,
         },
       ],
     });
 
     const block = response.content[0];
     if (!block || block.type !== 'text') throw new Error('Unexpected response from Haiku');
-    return block.text.trim();
+
+    const raw = block.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    const parsed = JSON.parse(raw) as { id: string };
+    if (!parsed.id) throw new Error('Haiku response missing id field');
+    return parsed.id;
   }
 
   private fallback(categories: CategoryResponse[]): CategoryResponse {
