@@ -55,6 +55,25 @@ export function dayKey(value: string | Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export function nextRecurringRun(dayOfMonth: number, now: Date = new Date()): Date {
+  const today = now.getDate();
+  if (dayOfMonth >= today) {
+    return new Date(now.getFullYear(), now.getMonth(), dayOfMonth);
+  }
+  return new Date(now.getFullYear(), now.getMonth() + 1, dayOfMonth);
+}
+
+export function formatNextRun(dayOfMonth: number, now: Date = new Date()): string {
+  const next = nextRecurringRun(dayOfMonth, now);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfNext = new Date(next.getFullYear(), next.getMonth(), next.getDate()).getTime();
+  const diffDays = Math.round((startOfNext - startOfToday) / (24 * 60 * 60 * 1000));
+  if (diffDays === 0) return 'วันนี้';
+  if (diffDays === 1) return 'พรุ่งนี้';
+  if (diffDays > 0 && diffDays < 7) return `อีก ${diffDays} วัน`;
+  return dayFormatter.format(next);
+}
+
 export const THAI_MONTH_NAMES = [
   'มกราคม',
   'กุมภาพันธ์',

@@ -22,6 +22,7 @@ import { Select, type SelectOption } from '../components/ui/Select';
 import { Switch } from '../components/ui/Switch';
 import { useToast } from '../components/ui/Toast';
 import { ApiError, apiFetch } from '../lib/api';
+import { formatCurrency, formatNextRun } from '../lib/format';
 
 type FormState = {
   amount: string;
@@ -130,26 +131,17 @@ export function Recurring() {
           </Button>
         </EmptyState>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 shadow-lg">
-          <div className="hidden grid-cols-[1fr_120px_120px_80px_120px] gap-4 border-b border-zinc-800 px-5 py-3 text-xs font-medium uppercase tracking-wide text-zinc-500 sm:grid">
-            <span>รายการ</span>
-            <span>จำนวน</span>
-            <span>หมวดหมู่</span>
-            <span>วันที่</span>
-            <span className="text-right">จัดการ</span>
-          </div>
-          <ul className="divide-y divide-zinc-800">
-            {items.map((item) => (
-              <RecurringRow
-                key={item.id}
-                item={item}
-                onEdit={() => setModal({ kind: 'edit', recurring: item })}
-                onDelete={() => setPendingDelete(item)}
-                onToggleActive={() => handleToggleActive(item)}
-              />
-            ))}
-          </ul>
-        </div>
+        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {items.map((item) => (
+            <RecurringCard
+              key={item.id}
+              item={item}
+              onEdit={() => setModal({ kind: 'edit', recurring: item })}
+              onDelete={() => setPendingDelete(item)}
+              onToggleActive={() => handleToggleActive(item)}
+            />
+          ))}
+        </ul>
       )}
 
       <RecurringFormModal
@@ -181,63 +173,64 @@ export function Recurring() {
   );
 }
 
-interface RecurringRowProps {
+interface RecurringCardProps {
   item: RecurringResponse;
   onEdit: () => void;
   onDelete: () => void;
   onToggleActive: () => void;
 }
 
-function RecurringRow({ item, onEdit, onDelete, onToggleActive }: RecurringRowProps) {
+function RecurringCard({ item, onEdit, onDelete, onToggleActive }: RecurringCardProps) {
   const isIncome = item.type === TransactionType.INCOME;
   const amountClass = isIncome ? 'text-emerald-400' : 'text-rose-400';
   const sign = isIncome ? '+' : '-';
-  const formatted = item.amount.toLocaleString('th-TH', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 
   return (
-    <li className="flex flex-col gap-3 px-5 py-4 sm:grid sm:grid-cols-[1fr_120px_120px_80px_120px] sm:items-center sm:gap-4">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-base">
-          {item.categoryIcon}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-zinc-100">
-            {item.description ?? item.categoryName}
-          </p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 sm:hidden">
-            <span className={amountClass}>{sign}฿{formatted}</span>
-            <span>·</span>
-            <span>วันที่ {item.dayOfMonth}</span>
-          </p>
+    <li
+      className={`flex flex-col gap-4 rounded-xl border bg-zinc-900 px-4 py-4 shadow-lg transition hover:border-zinc-700 ${
+        item.active ? 'border-zinc-800' : 'border-zinc-800/60 opacity-75'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xl">
+            {item.categoryIcon}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-zinc-100">
+              {item.description?.trim() || item.categoryName}
+            </p>
+            <p className="truncate text-xs text-zinc-500">{item.categoryName}</p>
+          </div>
         </div>
+        <span className={`shrink-0 text-base font-semibold tabular-nums ${amountClass}`}>
+          {sign}
+          {formatCurrency(item.amount)}
+        </span>
       </div>
 
-      <span className={`hidden text-sm font-semibold sm:block ${amountClass}`}>
-        {sign}฿{formatted}
-      </span>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Badge tone={isIncome ? 'income' : 'expense'}>{isIncome ? 'รายรับ' : 'รายจ่าย'}</Badge>
+        <Badge tone="neutral">วันที่ {item.dayOfMonth} ของเดือน</Badge>
+        {item.active ? (
+          <Badge tone="info">ครั้งถัดไป {formatNextRun(item.dayOfMonth)}</Badge>
+        ) : (
+          <Badge tone="neutral">ปิดใช้งาน</Badge>
+        )}
+      </div>
 
-      <span className="hidden items-center gap-1.5 text-sm text-zinc-300 sm:flex">
-        <span>{item.categoryIcon}</span>
-        <span className="truncate">{item.categoryName}</span>
-      </span>
-
-      <span className="hidden text-sm text-zinc-400 sm:block">วันที่ {item.dayOfMonth}</span>
-
-      <div className="flex items-center justify-between gap-2 sm:justify-end">
-        <div className="sm:hidden">
-          <Badge tone={item.active ? 'income' : 'neutral'}>
-            {item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2 border-t border-zinc-800 pt-3">
+        <div className="flex items-center gap-2">
           <Switch
             checked={item.active}
             onChange={onToggleActive}
             label={item.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
           />
+          <span className="text-xs text-zinc-500">
+            {item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
           <IconButton size="sm" tone="accent" label="แก้ไข" onClick={onEdit}>
             <PencilIcon className="h-4 w-4" />
           </IconButton>
