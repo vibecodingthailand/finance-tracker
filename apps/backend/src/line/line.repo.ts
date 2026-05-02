@@ -53,11 +53,11 @@ export class LineRepo {
         where: { userId: lineUserInternalId },
         data: { userId: webUserId },
       }),
+      this.prisma.user.delete({ where: { id: lineUserInternalId } }),
       this.prisma.user.update({
         where: { id: webUserId },
         data: { lineUserId },
       }),
-      this.prisma.user.delete({ where: { id: lineUserInternalId } }),
     ]);
   }
 
