@@ -17,6 +17,8 @@ export { CreateRecurringDto } from './recurring/create-recurring.dto';
 export { UpdateRecurringDto } from './recurring/update-recurring.dto';
 export type { RecurringResponse } from './recurring/recurring.types';
 
+export type { LinkCodeResponse } from './link/link.types';
+
 export { CreateTransactionDto } from './transaction/create-transaction.dto';
 export { UpdateTransactionDto } from './transaction/update-transaction.dto';
 export { GetTransactionsQueryDto } from './transaction/get-transactions-query.dto';

@@ -4,9 +4,12 @@ import { Category } from '@finance-tracker/database';
 import { CategoryResponse, TransactionType } from '@finance-tracker/shared';
 import { messagingApi, webhook } from '@line/bot-sdk';
 import { CategoryRepo } from '../category/category.repo';
+import { LinkRepo } from '../link/link.repo';
 import { AutoCategorizerService } from './categorizer/auto-categorizer.service';
 import { LineRepo } from './line.repo';
 import { parseThaiMessage } from './parsers/thai-message.parser';
+
+const LINK_PATTERN = /^เชื่อม\s+(\d{6})$/;
 
 @Injectable()
 export class LineService {
@@ -18,6 +21,7 @@ export class LineService {
     private readonly lineRepo: LineRepo,
     private readonly categoryRepo: CategoryRepo,
     private readonly categorizer: AutoCategorizerService,
+    private readonly linkRepo: LinkRepo,
   ) {
     this.client = new messagingApi.MessagingApiClient({
       channelAccessToken: this.config.getOrThrow<string>('LINE_CHANNEL_ACCESS_TOKEN'),
@@ -51,7 +55,7 @@ export class LineService {
     const text = textMessage.text.trim();
 
     const user = await this.lineRepo.findOrCreateByLineUserId(lineUserId);
-    const replyText = await this.buildReply(text, user.id);
+    const replyText = await this.buildReply(text, user.id, lineUserId);
 
     await this.client.replyMessage({
       replyToken,
@@ -59,7 +63,18 @@ export class LineService {
     });
   }
 
-  private async buildReply(text: string, userId: string): Promise<string> {
+  private async buildReply(text: string, userId: string, lineUserId: string): Promise<string> {
+    const linkMatch = text.match(LINK_PATTERN);
+    if (linkMatch) {
+      const code = linkMatch[1]!;
+      const linkCode = await this.linkRepo.findValid(code);
+      if (!linkCode) return 'code ไม่ถูกต้องหรือหมดอายุแล้ว';
+      if (linkCode.userId === userId) return 'บัญชีนี้เชื่อมแล้ว';
+      await this.lineRepo.mergeLineUserIntoWebUser(userId, lineUserId, linkCode.userId);
+      await this.linkRepo.markUsed(linkCode.id);
+      return 'เชื่อมเรียบร้อย! บัญชี LINE ของคุณเชื่อมกับเว็บแล้ว';
+    }
+
     const parsed = parseThaiMessage(text);
     if (parsed) {
       const cats = await this.categoryRepo.findAllForUser(userId);

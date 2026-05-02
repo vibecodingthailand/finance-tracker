@@ -43,6 +43,24 @@ export class LineRepo {
     return this.prisma.transaction.delete({ where: { id } });
   }
 
+  async mergeLineUserIntoWebUser(
+    lineUserInternalId: string,
+    lineUserId: string,
+    webUserId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.transaction.updateMany({
+        where: { userId: lineUserInternalId },
+        data: { userId: webUserId },
+      }),
+      this.prisma.user.update({
+        where: { id: webUserId },
+        data: { lineUserId },
+      }),
+      this.prisma.user.delete({ where: { id: lineUserInternalId } }),
+    ]);
+  }
+
   async sumByPeriod(
     userId: string,
     start: Date,

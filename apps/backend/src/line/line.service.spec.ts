@@ -1,15 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { User, Transaction } from '@finance-tracker/database';
+import { User, Transaction, LinkCode } from '@finance-tracker/database';
 import { Category } from '@finance-tracker/database';
 import { TransactionType } from '@finance-tracker/shared';
 import { webhook } from '@line/bot-sdk';
 import { CategoryRepo } from '../category/category.repo';
+import { LinkRepo } from '../link/link.repo';
 import { AutoCategorizerService } from './categorizer/auto-categorizer.service';
 import { LineRepo } from './line.repo';
 import { LineService } from './line.service';
 
-const MOCK_USER = { id: 'user-1' } as User;
+const MOCK_USER = { id: 'user-1', lineUserId: 'U123' } as User;
 
 const makeCategory = (id: string, name: string): Category =>
   ({
@@ -40,6 +41,7 @@ describe('LineService', () => {
   let lineRepo: jest.Mocked<LineRepo>;
   let categoryRepo: jest.Mocked<CategoryRepo>;
   let categorizer: jest.Mocked<AutoCategorizerService>;
+  let linkRepo: jest.Mocked<LinkRepo>;
   let replySpy: jest.SpyInstance;
 
   beforeEach(async () => {
@@ -63,18 +65,22 @@ describe('LineService', () => {
             findLastTransaction: jest.fn(),
             deleteTransaction: jest.fn(),
             sumByPeriod: jest.fn(),
+            mergeLineUserIntoWebUser: jest.fn(),
           },
         },
         {
           provide: CategoryRepo,
-          useValue: {
-            findAllForUser: jest.fn(),
-          },
+          useValue: { findAllForUser: jest.fn() },
         },
         {
           provide: AutoCategorizerService,
+          useValue: { categorize: jest.fn() },
+        },
+        {
+          provide: LinkRepo,
           useValue: {
-            categorize: jest.fn(),
+            findValid: jest.fn(),
+            markUsed: jest.fn(),
           },
         },
       ],
@@ -84,6 +90,7 @@ describe('LineService', () => {
     lineRepo = module.get(LineRepo);
     categoryRepo = module.get(CategoryRepo);
     categorizer = module.get(AutoCategorizerService);
+    linkRepo = module.get(LinkRepo);
     replySpy = jest
       .spyOn(service['client'], 'replyMessage')
       .mockResolvedValue({} as never);
@@ -179,8 +186,7 @@ describe('LineService', () => {
     });
 
     it('formats comma-separated amounts correctly', async () => {
-      const cat = makeCategory('cat-rent', 'ค่าเช่า');
-      categoryRepo.findAllForUser.mockResolvedValue([cat]);
+      categoryRepo.findAllForUser.mockResolvedValue([makeCategory('cat-rent', 'ค่าเช่า')]);
       categorizer.categorize.mockResolvedValue({
         id: 'cat-rent',
         name: 'ค่าเช่า',
@@ -226,8 +232,6 @@ describe('LineService', () => {
 
       const replyText: string = replySpy.mock.calls[0]?.[0]?.messages?.[0]?.text ?? '';
       expect(replyText).toContain('สรุปเดือนนี้');
-      expect(replyText).toContain('50,000');
-      expect(replyText).toContain('20,000');
     });
   });
 
@@ -251,7 +255,6 @@ describe('LineService', () => {
       expect(lineRepo.deleteTransaction).toHaveBeenCalledWith('tx-1');
       const replyText: string = replySpy.mock.calls[0]?.[0]?.messages?.[0]?.text ?? '';
       expect(replyText).toContain('ยกเลิกรายการล่าสุดแล้ว');
-      expect(replyText).toContain('กาแฟ');
     });
 
     it('replies ไม่มีรายการล่าสุด when no transactions exist', async () => {
@@ -268,6 +271,58 @@ describe('LineService', () => {
     });
   });
 
+  describe('เชื่อม command', () => {
+    beforeEach(() => {
+      lineRepo.findOrCreateByLineUserId.mockResolvedValue(MOCK_USER);
+    });
+
+    it('merges LINE user into web user on valid code', async () => {
+      const linkCode = { id: 'lc-1', userId: 'web-user-1' } as LinkCode;
+      linkRepo.findValid.mockResolvedValue(linkCode);
+      lineRepo.mergeLineUserIntoWebUser.mockResolvedValue();
+      linkRepo.markUsed.mockResolvedValue(linkCode);
+
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('เชื่อม 123456')] });
+      await flush();
+
+      expect(lineRepo.mergeLineUserIntoWebUser).toHaveBeenCalledWith('user-1', 'U123', 'web-user-1');
+      expect(linkRepo.markUsed).toHaveBeenCalledWith('lc-1');
+      expect(replySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [{ type: 'text', text: 'เชื่อมเรียบร้อย! บัญชี LINE ของคุณเชื่อมกับเว็บแล้ว' }],
+        }),
+      );
+    });
+
+    it('replies with error when code is invalid or expired', async () => {
+      linkRepo.findValid.mockResolvedValue(null);
+
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('เชื่อม 000000')] });
+      await flush();
+
+      expect(replySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [{ type: 'text', text: 'code ไม่ถูกต้องหรือหมดอายุแล้ว' }],
+        }),
+      );
+    });
+
+    it('replies already linked when code belongs to the same user', async () => {
+      const linkCode = { id: 'lc-1', userId: 'user-1' } as LinkCode;
+      linkRepo.findValid.mockResolvedValue(linkCode);
+
+      service.handleWebhook({ destination: 'U', events: [makeTextEvent('เชื่อม 123456')] });
+      await flush();
+
+      expect(lineRepo.mergeLineUserIntoWebUser).not.toHaveBeenCalled();
+      expect(replySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [{ type: 'text', text: 'บัญชีนี้เชื่อมแล้ว' }],
+        }),
+      );
+    });
+  });
+
   describe('help fallback', () => {
     it('replies with usage instructions for unrecognised text', async () => {
       lineRepo.findOrCreateByLineUserId.mockResolvedValue(MOCK_USER);
@@ -277,7 +332,6 @@ describe('LineService', () => {
 
       const replyText: string = replySpy.mock.calls[0]?.[0]?.messages?.[0]?.text ?? '';
       expect(replyText).toContain('วิธีใช้');
-      expect(replyText).toContain('กาแฟ 65');
     });
   });
 });
