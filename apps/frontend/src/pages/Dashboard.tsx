@@ -104,7 +104,7 @@ export function Dashboard() {
   return (
     <div className="flex flex-col gap-6 animate-[fadeIn_300ms_ease-out]">
       <PageHeader
-        title="ภาพรวม"
+        title="ภาพรวม Updated"
         subtitle={`สรุปประจำเดือน ${THAI_MONTH_NAMES[month - 1]} ${year}`}
         action={<MonthPicker month={month} year={year} onChange={handleMonthChange} />}
       />
