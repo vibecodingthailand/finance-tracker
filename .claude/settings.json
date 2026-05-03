@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | grep -q 'schema.prisma$' && pnpm --filter @finance-tracker/database exec prisma format || true"
+          }
+        ]
+      }
+    ]
+  }
+}
