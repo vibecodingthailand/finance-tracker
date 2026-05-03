@@ -4,6 +4,14 @@ set -euo pipefail
 step() { echo "==> $*"; }
 note() { echo "    $*"; }
 
+ENV_FILE="$(dirname "${BASH_SOURCE[0]}")/.deploy.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 : "${SERVER_IP:?SERVER_IP is required}"
 : "${DOMAIN:?DOMAIN is required}"
 : "${REMOTE_PATH:?REMOTE_PATH is required}"
